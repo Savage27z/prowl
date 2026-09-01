@@ -1,3 +1,4 @@
+// Chain utility functions for address and transaction handling
 // Chain utility functions
 
 export function isValidAddress(address: string): boolean {
