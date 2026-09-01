@@ -17,6 +17,7 @@ export function useSIWE() {
   const [session, setSession] = useState<SIWESession | null>(null);
   const [loading, setLoading] = useState(true);
   const [signing, setSigning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Check existing session on mount
   const checkSession = useCallback(async () => {
@@ -50,6 +51,7 @@ export function useSIWE() {
   const signIn = useCallback(async () => {
     if (!address || !chainId) return;
     setSigning(true);
+    setError(null);
 
     try {
       // 1. Get nonce from server
@@ -83,8 +85,10 @@ export function useSIWE() {
       if (result.ok) {
         setSession({ address: result.address, chainId: result.chainId });
       }
-    } catch (error) {
-      console.error('[SIWE] Sign-in failed:', error);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Sign-in failed';
+      console.error('[SIWE] Sign-in failed:', err);
+      setError(msg);
     } finally {
       setSigning(false);
     }
@@ -102,6 +106,7 @@ export function useSIWE() {
     signing,
     signIn,
     signOut,
+    error,
     isAuthenticated: !!session,
     isConnected,
   };

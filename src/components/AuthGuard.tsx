@@ -6,7 +6,7 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useSIWE } from '@/hooks/useSIWE';
 
 export default function AuthGuard({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isConnected, loading, signing, signIn } = useSIWE();
+  const { isAuthenticated, isConnected, loading, signing, signIn, error } = useSIWE();
 
   if (loading) {
     return (
@@ -149,6 +149,18 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
           >
             {signing ? 'Check your wallet…' : 'Sign in'}
           </button>
+
+          {error && (
+            <p style={{
+              marginTop: 16,
+              fontSize: 12,
+              color: 'var(--color-error, #8b3a3a)',
+              fontFamily: 'var(--font-mono)',
+              wordBreak: 'break-word',
+            }}>
+              {error}
+            </p>
+          )}
         </div>
       </div>
     );
