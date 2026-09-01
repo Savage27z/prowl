@@ -1,3 +1,4 @@
+// Tracer Agent — follows stolen funds hop by hop across Base
 // Agent 1: Tracer
 // Follows the money trail across wallets on Base
 // Writes hop data to Sibyl Memory for Analyst and Monitor to read
