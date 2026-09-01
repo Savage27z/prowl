@@ -19,8 +19,9 @@ export async function GET() {
 
     return NextResponse.json({ health, collections });
   } catch (error) {
+    console.error('[API] Memory check failed:', error);
     return NextResponse.json(
-      { error: 'Memory check failed', details: String(error) },
+      { error: 'Memory check failed' },
       { status: 500 },
     );
   }
@@ -60,8 +61,9 @@ export async function DELETE(req: NextRequest) {
       warning: 'This is the deletion test. Agents cannot coordinate without Sibyl Memory.',
     });
   } catch (error) {
+    console.error('[API] Memory clear failed:', error);
     return NextResponse.json(
-      { error: 'Memory clear failed', details: String(error) },
+      { error: 'Memory clear failed' },
       { status: 500 },
     );
   }

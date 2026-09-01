@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { useSIWE } from '@/hooks/useSIWE';
 
 function SearchIcon() {
@@ -32,25 +32,84 @@ function truncateAddress(addr: string) {
 export default function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { session, signOut } = useSIWE();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
     <div style={{
-      minHeight: '100vh', background: 'var(--color-accent-100, #fff3e4)',
-      padding: 'clamp(18px, 3vw, 46px)', fontFamily: 'var(--font-body)',
+      minHeight: '100vh', background: 'var(--color-accent-100)',
+      padding: 'clamp(12px, 3vw, 46px)', fontFamily: 'var(--font-body)',
       color: 'var(--color-text)',
     }}>
-      <div style={{
+      {/* Mobile top bar */}
+      <div className="pw-mobile-bar" style={{
+        display: 'none', alignItems: 'center', justifyContent: 'space-between',
+        padding: '12px 16px', marginBottom: 12,
+        background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
+        border: '1px solid var(--color-divider)',
+      }}>
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: 'inherit' }}>
+          <SearchIcon />
+          <span style={{ fontFamily: 'var(--font-heading)', fontSize: 15, letterSpacing: '0.2em', textTransform: 'uppercase' }}>Prowl</span>
+        </Link>
+        <button
+          onClick={() => setMobileNavOpen(!mobileNavOpen)}
+          type="button"
+          aria-label="Toggle menu"
+          style={{
+            width: 36, height: 36, borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--color-divider)', background: 'var(--color-card)',
+            display: 'grid', placeContent: 'center', gap: 4, cursor: 'pointer',
+          }}
+        >
+          <span style={{ display: 'block', width: 14, height: 1.5, background: 'var(--color-text)', borderRadius: 1 }} />
+          <span style={{ display: 'block', width: 14, height: 1.5, background: 'var(--color-text)', borderRadius: 1 }} />
+        </button>
+      </div>
+
+      {/* Mobile nav dropdown */}
+      {mobileNavOpen && (
+        <div className="pw-mobile-dropdown" style={{
+          display: 'none', flexDirection: 'column', gap: 2,
+          padding: '8px 12px', marginBottom: 12,
+          background: 'var(--color-surface)', borderRadius: 'var(--radius-lg)',
+          border: '1px solid var(--color-divider)',
+        }}>
+          {NAV_ITEMS.map((item) => {
+            const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+            return (
+              <Link key={item.label} href={item.href} onClick={() => setMobileNavOpen(false)} style={{
+                display: 'block', padding: '10px 12px', borderRadius: 'var(--radius-md)',
+                fontSize: '13.5px', textDecoration: 'none',
+                color: active ? 'var(--color-accent-700)' : 'var(--color-text)',
+                background: active ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'transparent',
+              }}>
+                {item.label}
+              </Link>
+            );
+          })}
+          <button onClick={signOut} type="button" style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '10px 12px', fontSize: '12.5px', color: 'var(--color-neutral-700)',
+            cursor: 'pointer', background: 'none', border: 'none', font: 'inherit',
+            borderTop: '1px solid var(--color-divider)', marginTop: 4, paddingTop: 14,
+          }}>
+            Sign out
+          </button>
+        </div>
+      )}
+
+      <div className="pw-shell-grid" style={{
         maxWidth: 1400, margin: '0 auto', display: 'grid',
         gridTemplateColumns: '246px minmax(0, 1fr)',
-        borderRadius: 'var(--radius-lg)', background: '#f3f2f2',
+        borderRadius: 'var(--radius-lg)', background: 'var(--color-card)',
         border: '1px solid var(--color-divider)',
-        boxShadow: '0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent)',
+        boxShadow: 'var(--shadow-lg)',
         overflow: 'hidden', minHeight: 'calc(100vh - clamp(36px, 6vw, 92px))',
       }}>
 
-        {/* ═══ SIDEBAR ═══ */}
-        <aside style={{
-          background: 'var(--color-surface, #eae9e9)',
+        {/* ═══ SIDEBAR (hidden on mobile) ═══ */}
+        <aside className="pw-sidebar" style={{
+          background: 'var(--color-surface)',
           borderRight: '1px solid var(--color-divider)',
           display: 'flex', flexDirection: 'column',
           padding: 'var(--space-6) var(--space-4)',
@@ -110,7 +169,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
             onClick={signOut}
             type="button"
             style={{
-              marginTop: 'auto', paddingTop: 'var(--space-6)',
+              marginTop: 'auto',
               borderTop: '1px solid var(--color-divider)',
               display: 'flex', alignItems: 'center', gap: 9,
               fontSize: '12.5px', color: 'var(--color-neutral-700)',
@@ -127,10 +186,20 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
         </aside>
 
         {/* ═══ MAIN ═══ */}
-        <main style={{ padding: 'clamp(22px, 2.4vw, 38px) clamp(22px, 2.6vw, 42px) clamp(26px, 3vw, 42px)' }}>
+        <main style={{ padding: 'clamp(16px, 2.4vw, 38px) clamp(16px, 2.6vw, 42px) clamp(20px, 3vw, 42px)' }}>
           {children}
         </main>
       </div>
+
+      {/* Responsive styles */}
+      <style>{`
+        @media (max-width: 768px) {
+          .pw-mobile-bar { display: flex !important; }
+          .pw-mobile-dropdown { display: flex !important; }
+          .pw-sidebar { display: none !important; }
+          .pw-shell-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   );
 }

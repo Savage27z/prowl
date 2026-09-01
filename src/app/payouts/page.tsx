@@ -48,7 +48,7 @@ export default function Payouts() {
 
       {/* Table header */}
       <div style={{
-        display: 'grid', gridTemplateColumns: '100px 1fr 100px 120px 120px',
+        display: 'grid', gridTemplateColumns: '100px 1fr 100px 120px 120px', minWidth: 560,
         gap: 'var(--space-3)', padding: '0 0 var(--space-3) 0',
         borderBottom: '1px solid var(--color-divider)',
         fontFamily: 'var(--font-mono)', fontSize: '9.5px',
@@ -80,7 +80,7 @@ export default function Payouts() {
       ) : (
         payouts.map((p, i) => (
           <div key={i} style={{
-            display: 'grid', gridTemplateColumns: '100px 1fr 100px 120px 120px',
+            display: 'grid', gridTemplateColumns: '100px 1fr 100px 120px 120px', minWidth: 560,
             gap: 'var(--space-3)', padding: 'var(--space-3) 0',
             borderBottom: '1px solid var(--color-divider)',
             alignItems: 'center',

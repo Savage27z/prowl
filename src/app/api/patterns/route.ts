@@ -29,8 +29,9 @@ export async function GET() {
       },
     });
   } catch (error) {
+    console.error('[API] Patterns fetch failed:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch patterns', details: String(error) },
+      { error: 'Failed to fetch patterns' },
       { status: 500 }
     );
   }

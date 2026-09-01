@@ -15,9 +15,19 @@
   --color-neutral-700: #605d5d;
   --color-surface: #eae9e9;
   --color-bg: #f3f2f2;
+  --color-card: #f3f2f2;
   --color-accent-100: #fff3e4;
   --color-neutral-800: #444;
   --color-divider: color-mix(in srgb, #201f1d 16%, transparent);
+  --color-status-analysing: #5b6abf;
+  --color-status-analysing-bg: #eef0ff;
+  --color-status-analysing-border: #c5caef;
+  --color-status-solved: #2d8a56;
+  --color-status-solved-bg: #edf7f1;
+  --color-status-solved-border: #b0dcc2;
+  --color-error: #8b3a3a;
+  --color-error-bg: #fdf0f0;
+  --color-error-border: #e5a0a0;
   --space-8: 36.8px;
   --shadow-lg: 0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent);
   --shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent);
@@ -48,9 +58,19 @@
     --color-neutral-700: #b5b1ab;
     --color-surface: #252422;
     --color-bg: #161513;
+    --color-card: #1e1d1b;
     --color-accent-100: #2a2015;
     --color-neutral-800: #c5c1bb;
     --color-divider: color-mix(in srgb, #e8e5e1 14%, transparent);
+    --color-status-analysing: #8b9ae0;
+    --color-status-analysing-bg: #1e2040;
+    --color-status-analysing-border: #3a4080;
+    --color-status-solved: #4ec07a;
+    --color-status-solved-bg: #152a1e;
+    --color-status-solved-border: #2a5a3a;
+    --color-error: #e0a0a0;
+    --color-error-bg: #2a1515;
+    --color-error-border: #5a2a2a;
     --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.4);
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   }
@@ -72,12 +92,21 @@
   --color-accent-100: #2a2015;
   --color-neutral-800: #c5c1bb;
   --color-divider: color-mix(in srgb, #e8e5e1 14%, transparent);
+  --color-status-analysing: #8b9ae0;
+  --color-status-analysing-bg: #1e2040;
+  --color-status-analysing-border: #3a4080;
+  --color-status-solved: #4ec07a;
+  --color-status-solved-bg: #152a1e;
+  --color-status-solved-border: #2a5a3a;
+  --color-error: #e0a0a0;
+  --color-error-bg: #2a1515;
+  --color-error-border: #5a2a2a;
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.4);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 @theme inline {
-  --color-background: #ffffff;
+  --color-background: var(--color-bg);
   --color-foreground: var(--color-text);
   --font-sans: var(--font-lora), "Lora", Georgia, serif;
   --font-mono: var(--font-space-mono), "Space Mono", monospace;

@@ -16,7 +16,7 @@ export async function GET() {
     return NextResponse.json(status);
   } catch (error) {
     return NextResponse.json(
-      { error: 'Monitor status failed', details: String(error) },
+      { error: 'Monitor status failed' },
       { status: 500 }
     );
   }
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: 'Monitor check failed', details: String(error) },
+      { error: 'Monitor check failed' },
       { status: 500 }
     );
   }

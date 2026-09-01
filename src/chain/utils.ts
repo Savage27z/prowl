@@ -11,17 +11,28 @@ export function isValidTxHash(hash: string): boolean {
 
 export function weiToEth(wei: bigint | string): string {
   const weiNum = typeof wei === 'string' ? BigInt(wei) : wei;
-  const eth = Number(weiNum) / 1e18;
+  // Divide by 10^12 first (stays within safe integer range), then by 10^6
+  const eth = Number(weiNum / BigInt('1000000000000')) / 1e6;
   return eth.toFixed(6);
 }
 
 export function ethToWei(eth: string | number): bigint {
-  return BigInt(Math.floor(Number(eth) * 1e18));
+  // Split into whole and fractional to avoid Number precision loss
+  const str = String(eth);
+  const [whole = '0', frac = ''] = str.split('.');
+  const padded = (frac + '000000000000000000').slice(0, 18);
+  return BigInt(whole) * BigInt('1000000000000000000') + BigInt(padded);
 }
 
 export function checksumAddress(address: string): string {
-  // Basic lowercase normalization — proper checksum needs keccak
-  return address.toLowerCase();
+  // Use viem's getAddress for proper EIP-55 checksum when available
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getAddress } = require('viem');
+    return getAddress(address);
+  } catch {
+    return address.toLowerCase();
+  }
 }
 
 export function shortenTxHash(hash: string, chars = 8): string {

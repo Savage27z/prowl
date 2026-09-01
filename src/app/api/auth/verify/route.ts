@@ -16,7 +16,14 @@ export async function POST(req: NextRequest) {
 
     const session = await getSession();
     const siweMessage = new SiweMessage(message);
-    const { data: fields } = await siweMessage.verify({ signature, nonce: session.nonce });
+
+    // Validate domain and nonce to prevent cross-domain replay attacks
+    const expectedDomain = new URL(req.url).host;
+    const { data: fields } = await siweMessage.verify({
+      signature,
+      nonce: session.nonce,
+      domain: expectedDomain,
+    });
 
     if (fields.nonce !== session.nonce) {
       return NextResponse.json(

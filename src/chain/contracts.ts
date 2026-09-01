@@ -16,7 +16,7 @@ const BOUNTY_CONTRACT_ABI = [
   {
     name: 'claimBounty',
     type: 'function',
-    stateMutability: 'nonpayable',
+    stateMutability: 'payable',
     inputs: [{ name: 'bountyId', type: 'uint256' }],
     outputs: [],
   },

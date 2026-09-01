@@ -136,7 +136,7 @@ export async function POST() {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: 'Seed failed', details: String(error) },
+      { error: 'Seed failed' },
       { status: 500 },
     );
   }

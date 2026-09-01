@@ -49,7 +49,7 @@ export default function PostBounty() {
   const inputStyle = {
     width: '100%', padding: '10px 14px',
     borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)',
-    background: '#f3f2f2', fontFamily: 'var(--font-mono)', fontSize: 13,
+    background: 'var(--color-card)', fontFamily: 'var(--font-mono)', fontSize: 13,
     color: 'var(--color-text)', outline: 'none',
   } as const;
 
@@ -96,14 +96,14 @@ export default function PostBounty() {
           </div>
 
           {error && (
-            <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid #e5a0a0', background: '#fdf0f0', fontSize: 13, color: '#8b3a3a' }}>
+            <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-error-border)', background: 'var(--color-error-bg)', fontSize: 13, color: 'var(--color-error)' }}>
               {error}
             </div>
           )}
 
           <button type="submit" disabled={submitting || !victimWallet || !incidentTx} style={{
             padding: '12px 24px', borderRadius: 'var(--radius-md)',
-            background: 'var(--color-text)', color: '#f3f2f2',
+            background: 'var(--color-text)', color: 'var(--color-bg)',
             fontFamily: 'var(--font-mono)', fontSize: '11px',
             letterSpacing: '0.12em', textTransform: 'uppercase',
             border: 'none', cursor: 'pointer',

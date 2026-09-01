@@ -1,7 +1,7 @@
 // Web3Provider — wraps the app with RainbowKit + wagmi + React Query
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WagmiProvider } from 'wagmi';
 import {
@@ -12,8 +12,6 @@ import {
 import { wagmiConfig } from '@/lib/wagmi';
 
 import '@rainbow-me/rainbowkit/styles.css';
-
-const queryClient = new QueryClient();
 
 // Custom RainbowKit theme that matches Prowl's warm design system
 const prowlLightTheme = lightTheme({
@@ -31,6 +29,7 @@ const prowlDarkTheme = darkTheme({
 });
 
 export default function Web3Provider({ children }: { children: ReactNode }) {
+  const [queryClient] = useState(() => new QueryClient());
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>

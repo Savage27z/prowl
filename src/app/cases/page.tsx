@@ -16,9 +16,9 @@ interface CaseData {
 function statusStyle(status: string) {
   switch (status) {
     case 'tracing': return { color: 'var(--color-accent-700)', bg: 'var(--color-accent-100)', border: 'var(--color-accent-300)' };
-    case 'analysing': return { color: '#5b6abf', bg: '#eef0ff', border: '#c5caef' };
+    case 'analysing': return { color: 'var(--color-status-analysing)', bg: 'var(--color-status-analysing-bg)', border: 'var(--color-status-analysing-border)' };
     case 'monitoring': return { color: '#6b7280', bg: 'var(--color-neutral-100)', border: 'var(--color-neutral-300)' };
-    case 'solved': return { color: '#2d8a56', bg: '#edf7f1', border: '#b0dcc2' };
+    case 'solved': return { color: 'var(--color-status-solved)', bg: 'var(--color-status-solved-bg)', border: 'var(--color-status-solved-border)' };
     default: return { color: 'var(--color-neutral-600)', bg: 'var(--color-neutral-100)', border: 'var(--color-neutral-300)' };
   }
 }
@@ -58,17 +58,17 @@ export default function Cases() {
         </div>
         <Link href="/bounty/new" style={{
           padding: '8px 18px', borderRadius: 'var(--radius-md)',
-          background: 'var(--color-text)', color: '#f3f2f2',
+          background: 'var(--color-text)', color: 'var(--color-bg)',
           fontFamily: 'var(--font-mono)', fontSize: '10.5px',
           letterSpacing: '0.1em', textTransform: 'uppercase',
           textDecoration: 'none',
         }}>+ New case</Link>
       </div>
 
-      <div style={{ marginTop: 'var(--space-6)' }}>
+      <div style={{ marginTop: 'var(--space-6)', overflowX: 'auto' }}>
         {/* Header */}
         <div style={{
-          display: 'grid', gridTemplateColumns: '90px 120px 80px 80px 80px 90px',
+          display: 'grid', gridTemplateColumns: '90px 120px 80px 80px 80px 90px', minWidth: 540,
           gap: 'var(--space-3)', padding: '0 0 var(--space-3) 0',
           borderBottom: '1px solid var(--color-divider)',
           fontFamily: 'var(--font-mono)', fontSize: '9.5px',
@@ -103,7 +103,7 @@ export default function Cases() {
             const st = statusStyle(c.status);
             return (
               <Link key={c.case_id} href={`/case/${c.case_id.replace('case/', '')}`} style={{
-                display: 'grid', gridTemplateColumns: '90px 120px 80px 80px 80px 90px',
+                display: 'grid', gridTemplateColumns: '90px 120px 80px 80px 80px 90px', minWidth: 540,
                 gap: 'var(--space-3)', padding: 'var(--space-3) 0',
                 borderBottom: '1px solid var(--color-divider)',
                 alignItems: 'center', textDecoration: 'none', color: 'inherit',

@@ -7,19 +7,22 @@ import { getSharedCoordinator } from '@/agents/shared';
 import { isValidAddress, isValidTxHash } from '@/chain/utils';
 import { requireAuth } from '@/lib/auth';
 
-// Simple in-memory rate limiter: max 5 investigations per minute
-const recentRequests: number[] = [];
+// Per-address rate limiter: max 5 investigations per minute per wallet
+const recentRequests = new Map<string, number[]>();
 const RATE_LIMIT = 5;
 const RATE_WINDOW = 60_000;
 
-function checkRateLimit(): boolean {
+function checkRateLimit(address: string): boolean {
   const now = Date.now();
+  const key = address.toLowerCase();
+  const timestamps = recentRequests.get(key) || [];
   // Remove entries older than the window
-  while (recentRequests.length > 0 && recentRequests[0] < now - RATE_WINDOW) {
-    recentRequests.shift();
+  while (timestamps.length > 0 && timestamps[0] < now - RATE_WINDOW) {
+    timestamps.shift();
   }
-  if (recentRequests.length >= RATE_LIMIT) return false;
-  recentRequests.push(now);
+  if (timestamps.length >= RATE_LIMIT) return false;
+  timestamps.push(now);
+  recentRequests.set(key, timestamps);
   return true;
 }
 
@@ -28,7 +31,7 @@ export async function POST(req: NextRequest) {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
 
-    if (!checkRateLimit()) {
+    if (!checkRateLimit(auth.address)) {
       return NextResponse.json(
         { error: 'Rate limited — max 5 investigations per minute' },
         { status: 429 },
@@ -81,7 +84,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('[API] Investigation error:', error);
     return NextResponse.json(
-      { error: 'Investigation failed', details: String(error) },
+      { error: 'Investigation failed' },
       { status: 500 },
     );
   }
@@ -89,6 +92,9 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
+
     const coordinator = getSharedCoordinator();
     const caseId = req.nextUrl.searchParams.get('caseId');
 
@@ -105,8 +111,9 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ cases, stats });
   } catch (error) {
+    console.error('[API] Fetch investigations error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch investigations', details: String(error) },
+      { error: 'Failed to fetch investigations' },
       { status: 500 },
     );
   }

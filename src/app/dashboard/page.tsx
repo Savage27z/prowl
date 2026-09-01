@@ -144,7 +144,7 @@ export default function Dashboard() {
             <Link href="/bounty/new" style={{
               position: 'absolute', right: 16, bottom: 14,
               width: 46, height: 46, borderRadius: 999,
-              background: '#f3f2f2', display: 'grid', placeContent: 'center',
+              background: 'var(--color-card)', display: 'grid', placeContent: 'center',
               fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase',
               fontFamily: 'var(--font-mono)', textDecoration: 'none',
               color: 'var(--color-text)', border: '1px solid var(--color-divider)',
@@ -181,13 +181,13 @@ export default function Dashboard() {
                 <path d={CHART_AREA} fill="var(--color-accent-100)" opacity="0.85" />
                 <path d={CHART_LINE} fill="none" stroke="var(--color-accent)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
                 <line x1="424.7" y1="18" x2="424.7" y2="182" stroke="var(--color-neutral-400)" strokeWidth="1" strokeDasharray="3 4" />
-                <circle cx="424.7" cy="24.6" r="4.5" fill="#f3f2f2" stroke="var(--color-accent)" strokeWidth="2.4" />
+                <circle cx="424.7" cy="24.6" r="4.5" fill="var(--color-card)" stroke="var(--color-accent)" strokeWidth="2.4" />
               </svg>
               <div style={{
                 position: 'absolute', left: '68.49%', top: 10, transform: 'translateX(-50%)',
-                background: '#f3f2f2', border: '1px solid var(--color-divider)',
+                background: 'var(--color-card)', border: '1px solid var(--color-divider)',
                 borderRadius: 'var(--radius-md)',
-                boxShadow: '0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent)',
+                boxShadow: 'var(--shadow-sm)',
                 padding: '6px 11px', fontFamily: 'var(--font-mono)', fontSize: 12,
                 fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
               }}>12 210</div>
@@ -245,7 +245,7 @@ export default function Dashboard() {
             {TRAILS.map((t) => (
               <div key={t.abbr} style={{
                 borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)',
-                background: '#f3f2f2', padding: 'var(--space-3)', textAlign: 'center',
+                background: 'var(--color-card)', padding: 'var(--space-3)', textAlign: 'center',
               }}>
                 <span style={{
                   width: 28, height: 28, margin: '0 auto', borderRadius: 999,
@@ -263,7 +263,7 @@ export default function Dashboard() {
           </div>
           <Link href="/case/001" style={{
             alignSelf: 'stretch', borderRadius: 'var(--radius-md)',
-            background: '#14120f', color: '#f3f2f2',
+            background: 'var(--color-text)', color: 'var(--color-bg)',
             display: 'flex', flexDirection: 'column', alignItems: 'center',
             justifyContent: 'center', gap: 8, padding: 'var(--space-3)',
             textAlign: 'center', textDecoration: 'none',
