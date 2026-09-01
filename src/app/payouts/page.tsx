@@ -1,3 +1,4 @@
+// Payouts — bounty reward tracking and claim status
 'use client';
 
 import { useState, useEffect } from 'react';
