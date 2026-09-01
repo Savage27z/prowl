@@ -1,3 +1,4 @@
+// Sibyl Memory — dual-mode adapter (local dev + real Sibyl bridge)
 // Sibyl Memory — unified interface
 // Mode 1 (default): in-memory store — works instantly, no deps
 // Mode 2 (SIBYL_BRIDGE_URL set): forwards to Python sibyl-memory-client bridge
