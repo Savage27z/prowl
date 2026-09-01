@@ -1,3 +1,4 @@
+// Patterns — grid view of detected attack patterns
 'use client';
 
 import { useState, useEffect } from 'react';
