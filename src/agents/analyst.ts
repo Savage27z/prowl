@@ -1,3 +1,4 @@
+// Analyst Agent — pattern recognition and cross-case correlation
 // Agent 2: Analyst
 // Matches patterns against memory of past cases and known scam signatures
 // Reads Tracer's findings, writes analysis back to Sibyl Memory
