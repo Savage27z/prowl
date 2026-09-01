@@ -58,32 +58,35 @@ export function useSIWE() {
       const nonceRes = await fetch('/api/auth/nonce');
       const { nonce } = await nonceRes.json();
 
-      // 2. Create SIWE message
-      const message = new SiweMessage({
+      // 2. Create SIWE message fields
+      const messageFields = {
         domain: window.location.host,
         address,
         statement: 'Sign in to Prowl — AI Crypto Investigation Swarm',
         uri: window.location.origin,
-        version: '1',
+        version: '1' as const,
         chainId,
         nonce,
-      });
+      };
 
+      const message = new SiweMessage(messageFields);
       const messageString = message.prepareMessage();
 
       // 3. Sign the message
       const signature = await signMessageAsync({ message: messageString });
 
-      // 4. Verify on server
+      // 4. Verify on server — send fields object, not the prepared string
       const verifyRes = await fetch('/api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: messageString, signature }),
+        body: JSON.stringify({ message: messageFields, signature }),
       });
 
       const result = await verifyRes.json();
       if (result.ok) {
         setSession({ address: result.address, chainId: result.chainId });
+      } else {
+        setError(result.error || 'Verification failed');
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Sign-in failed';
