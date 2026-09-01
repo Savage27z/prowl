@@ -1,3 +1,4 @@
+// LandingNav — responsive navigation for the landing page
 'use client';
 
 import { useState } from 'react';
