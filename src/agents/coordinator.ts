@@ -239,23 +239,56 @@ export class Coordinator {
   }
 
   // Get investigation stats
-  async getStats(): Promise<{
-    totalCases: number;
-    activeCases: number;
-    solvedCases: number;
-    totalPatterns: number;
-    watchedAddresses: number;
-  }> {
+  async getStats() {
     const cases = await this.memory.query<Case>(COLLECTIONS.CASES, {});
     const patternStats = await this.memory.stats(COLLECTIONS.PATTERNS);
     const monitorStatus = await this.monitor.getStatus();
 
+    // Compute agent involvement counts
+    const agentCounts: Record<string, number> = { tracer: 0, analyst: 0, monitor: 0, coordinator: 0 };
+    let totalHops = 0;
+    let totalFundsEth = 0;
+
+    for (const c of cases) {
+      totalHops += c.total_hops_traced || 0;
+      // Parse funds like "2.0 ETH" → 2.0
+      const fundsMatch = c.total_funds_traced?.match(/([\d.]+)/);
+      if (fundsMatch) totalFundsEth += parseFloat(fundsMatch[1]);
+      for (const agent of c.agents_involved || []) {
+        agentCounts[agent] = (agentCounts[agent] || 0) + 1;
+      }
+      // Coordinator is always involved
+      agentCounts.coordinator = (agentCounts.coordinator || 0) + 1;
+    }
+
+    // Compute daily hop distribution from cases (group by day of week)
+    const dailyHops: number[] = [0, 0, 0, 0, 0, 0, 0]; // Mon-Sun
+    for (const c of cases) {
+      if (c.created_at) {
+        const day = new Date(c.created_at).getDay(); // 0=Sun
+        const idx = day === 0 ? 6 : day - 1; // shift to Mon=0
+        dailyHops[idx] += c.total_hops_traced || 0;
+      }
+    }
+
+    // Pattern type distribution for trails
+    const patterns = await this.memory.query<{ pattern_type: string; times_matched: number }>(COLLECTIONS.PATTERNS, {});
+    const trailCounts: Record<string, number> = {};
+    for (const p of patterns) {
+      trailCounts[p.pattern_type] = (trailCounts[p.pattern_type] || 0) + p.times_matched;
+    }
+
     return {
       totalCases: cases.length,
-      activeCases: cases.filter((c) => c.status === 'active').length,
+      activeCases: cases.filter((c) => c.status === 'active' || c.status === 'monitoring').length,
       solvedCases: cases.filter((c) => c.status === 'solved').length,
       totalPatterns: patternStats.count,
       watchedAddresses: monitorStatus.totalWatching,
+      totalHops,
+      totalFundsEth,
+      agentCounts,
+      dailyHops,
+      trailCounts,
     };
   }
 }
