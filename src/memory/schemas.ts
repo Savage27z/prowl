@@ -1,3 +1,4 @@
+// Core data types for Prowl investigation memory
 // Sibyl Memory collection schemas for Prowl
 // All 3 agents coordinate through these shared memory structures
 
