@@ -1,3 +1,4 @@
+// DashboardShell — shared layout wrapper with sidebar navigation
 'use client';
 
 import Link from 'next/link';
