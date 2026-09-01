@@ -18,7 +18,8 @@ export async function POST(req: NextRequest) {
     const siweMessage = new SiweMessage(message);
 
     // Validate domain and nonce to prevent cross-domain replay attacks
-    const expectedDomain = new URL(req.url).host;
+    // Use x-forwarded-host (set by Vercel/proxies) or Host header, not req.url
+    const expectedDomain = req.headers.get('x-forwarded-host') || req.headers.get('host') || new URL(req.url).host;
     const { data: fields } = await siweMessage.verify({
       signature,
       nonce: session.nonce,
