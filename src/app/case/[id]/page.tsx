@@ -1,3 +1,4 @@
+// Case Detail — live investigation feed, hop timeline, and analysis
 'use client';
 
 import { useState, useEffect, useRef, useCallback, use } from 'react';
