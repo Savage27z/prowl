@@ -1,3 +1,4 @@
+// BountyCard — compact case summary card for dashboard grids
 'use client';
 
 import { truncateAddress, formatEth, formatDate, statusBadge } from '@/lib/utils';
