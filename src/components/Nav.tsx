@@ -1,3 +1,4 @@
+// Nav — top-level navigation bar component
 'use client';
 
 import Link from 'next/link';
