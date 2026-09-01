@@ -182,8 +182,8 @@ export default function Dashboard() {
           </div>
 
           {/* Escrow banner */}
-          <div style={{
-            position: 'relative', overflow: 'hidden', width: 320,
+          <div className="pw-escrow" style={{
+            position: 'relative', overflow: 'hidden', width: 320, maxWidth: '100%',
             borderRadius: 'var(--radius-md)', border: '1px solid var(--color-accent-300)',
             background: 'var(--color-accent-100)', padding: 'var(--space-4)',
           }}>
@@ -210,7 +210,7 @@ export default function Dashboard() {
         </div>
 
         {/* Activity + Top agents row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.55fr) minmax(0, 1fr)', gap: 'clamp(20px, 2.4vw, 40px)', alignItems: 'start' }}>
+        <div className="pw-dash-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.55fr) minmax(0, 1fr)', gap: 'clamp(20px, 2.4vw, 40px)', alignItems: 'start' }}>
           {/* Activity chart */}
           <section>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
@@ -298,7 +298,7 @@ export default function Dashboard() {
 
         {/* Trails section */}
         {trails.length > 0 ? (
-          <section style={{
+          <section className="pw-trails" style={{
             borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)',
             background: 'var(--color-neutral-100)', padding: 'var(--space-6)',
             display: 'grid', gridTemplateColumns: 'minmax(150px, 200px) minmax(0, 1fr) 104px',
@@ -330,7 +330,7 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
-            <Link href="/cases" style={{
+            <Link href="/cases" className="pw-trails-button" style={{
               alignSelf: 'stretch', borderRadius: 'var(--radius-md)',
               background: 'var(--color-text)', color: 'var(--color-bg)',
               display: 'flex', flexDirection: 'column', alignItems: 'center',

@@ -211,7 +211,7 @@ export default function Home() {
   }
 
   return (
-    <div style={{ width: '100%', overflowX: 'clip', background: '#fff', color: 'var(--color-text)', fontFamily: 'var(--font-body)', padding: 8 }}>
+    <div style={{ width: '100%', overflowX: 'clip', background: 'var(--color-bg)', color: 'var(--color-text)', fontFamily: 'var(--font-body)', padding: 8 }}>
 
       {/* ════════ HERO ════════ */}
       <section style={{
@@ -237,7 +237,7 @@ export default function Home() {
           padding: '26px clamp(20px,3vw,44px) 0', fontSize: 12,
           animation: '0.8s cubic-bezier(0.16,1,0.3,1) 2s 1 normal both running pw-fade',
         }}>
-          <div style={{ flex: 1, display: 'flex', gap: 30 }}>
+          <div className="pw-hero-nav" style={{ flex: 1, display: 'flex', gap: 30 }}>
             <a href="#swarm" style={{ color: 'rgba(243,242,242,0.9)', textDecoration: 'none' }}>The Swarm</a>
             <a href="#how" style={{ color: 'rgba(243,242,242,0.9)', textDecoration: 'none' }}>How it works</a>
           </div>
@@ -248,7 +248,7 @@ export default function Home() {
             </span>
           </div>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 18 }}>
-            <Link href="/bounty/new" style={{
+            <Link href="/bounty/new" className="pw-hero-cta" style={{
               background: 'none', border: 0, color: '#f3f2f2',
               fontFamily: 'var(--font-heading)', fontSize: '11.5px',
               letterSpacing: '0.16em', textTransform: 'uppercase',
@@ -270,8 +270,8 @@ export default function Home() {
         {/* Title */}
         <div style={{ padding: '18px clamp(20px,3vw,44px) 0' }}>
           <h1 style={{
-            fontSize: '11.2vw', fontWeight: 400, lineHeight: 0.86,
-            letterSpacing: '-0.03em', margin: 0, whiteSpace: 'nowrap',
+            fontSize: 'clamp(42px, 11.2vw, 160px)', fontWeight: 400, lineHeight: 0.86,
+            letterSpacing: '-0.03em', margin: 0,
             fontFamily: 'var(--font-heading)',
           }}>
             <span style={{ display: 'inline-block', overflow: 'hidden', paddingBottom: '0.14em', verticalAlign: 'bottom' }}>
@@ -345,7 +345,7 @@ export default function Home() {
           }}>
             <div style={{
               alignSelf: 'flex-start', borderRadius: 'var(--radius-sm)',
-              background: '#fff', border: '1px solid var(--color-divider)',
+              background: 'var(--color-card)', border: '1px solid var(--color-divider)',
               padding: '8px 14px', fontFamily: 'var(--font-mono)', fontSize: 15,
             }}>#01</div>
             <div>
@@ -415,7 +415,7 @@ export default function Home() {
                   <span style={{ display: 'block', fontFamily: 'var(--font-heading)', fontSize: 'clamp(24px,2.4vw,32px)', letterSpacing: '-0.015em' }}>{a.name}</span>
                   <span style={{ display: 'block', fontSize: '13.5px', color: 'var(--color-neutral-700)', marginTop: 4 }}>{a.desc}</span>
                 </span>
-                <span style={{ flex: '0 0 auto', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--color-accent-700)' }}>{a.tags}</span>
+                <span className="pw-swarm-tags" style={{ flex: '0 0 auto', fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--color-accent-700)' }}>{a.tags}</span>
                 <span style={{
                   width: 46, height: 46, flex: '0 0 auto', borderRadius: 999,
                   border: '1px solid var(--color-divider)', display: 'grid', placeContent: 'center',
@@ -432,7 +432,7 @@ export default function Home() {
 
       {/* ════════ HOW IT WORKS ════════ */}
       <section id="how" style={{
-        background: '#fff', borderRadius: 'var(--radius-lg)', marginTop: -40,
+        background: 'var(--color-bg)', borderRadius: 'var(--radius-lg)', marginTop: -40,
         padding: 'clamp(52px,5vw,88px) clamp(20px,3vw,44px) clamp(56px,6vw,96px)',
       }}>
         <Reveal variant="fade-up">

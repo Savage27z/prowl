@@ -59,19 +59,19 @@ function statusStyle(status: string) {
   switch (status) {
     case 'active': return { color: 'var(--color-accent-700)', bg: 'var(--color-accent-100)', border: 'var(--color-accent-300)' };
     case 'tracing': return { color: 'var(--color-accent-700)', bg: 'var(--color-accent-100)', border: 'var(--color-accent-300)' };
-    case 'analysing': return { color: '#5b6abf', bg: '#eef0ff', border: '#c5caef' };
-    case 'monitoring': return { color: '#6b7280', bg: 'var(--color-neutral-100)', border: 'var(--color-neutral-300)' };
-    case 'solved': return { color: '#2d8a56', bg: '#edf7f1', border: '#b0dcc2' };
-    case 'dead_end': return { color: '#8b3a3a', bg: '#fdf0f0', border: '#e5a0a0' };
+    case 'analysing': return { color: 'var(--color-status-analysing)', bg: 'var(--color-status-analysing-bg)', border: 'var(--color-status-analysing-border)' };
+    case 'monitoring': return { color: 'var(--color-neutral-600)', bg: 'var(--color-neutral-100)', border: 'var(--color-neutral-300)' };
+    case 'solved': return { color: 'var(--color-status-solved)', bg: 'var(--color-status-solved-bg)', border: 'var(--color-status-solved-border)' };
+    case 'dead_end': return { color: 'var(--color-error)', bg: 'var(--color-error-bg)', border: 'var(--color-error-border)' };
     default: return { color: 'var(--color-neutral-600)', bg: 'var(--color-neutral-100)', border: 'var(--color-neutral-300)' };
   }
 }
 
 const AGENT_COLORS: Record<string, string> = {
-  coordinator: '#605d5d',
+  coordinator: 'var(--color-neutral-600)',
   tracer: 'var(--color-accent-700)',
-  analyst: '#5b6abf',
-  monitor: '#6b7280',
+  analyst: 'var(--color-status-analysing)',
+  monitor: 'var(--color-neutral-600)',
 };
 
 const AGENT_ICONS: Record<string, string> = {
@@ -135,7 +135,7 @@ function EventDetails({ data }: { data: Record<string, unknown> }) {
       {risk && (
         <span style={{
           fontFamily: 'var(--font-mono)', fontSize: '9.5px',
-          color: risk === 'high' ? '#8b3a3a' : risk === 'medium' ? 'var(--color-accent-700)' : 'var(--color-neutral-600)',
+          color: risk === 'high' ? 'var(--color-error)' : risk === 'medium' ? 'var(--color-accent-700)' : 'var(--color-neutral-600)',
         }}>
           Risk: {risk.toUpperCase()}
         </span>
@@ -151,7 +151,7 @@ function EventDetails({ data }: { data: Record<string, unknown> }) {
         </span>
       )}
       {dest && (
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9.5px', color: '#2d8a56' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9.5px', color: 'var(--color-status-solved)' }}>
           → {dest.replace('_', ' ')}
         </span>
       )}
@@ -303,7 +303,7 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
         ].map((s) => (
           <div key={s.label} style={{
             borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)',
-            background: '#f3f2f2', padding: 'var(--space-3)', textAlign: 'center',
+            background: 'var(--color-card)', padding: 'var(--space-3)', textAlign: 'center',
           }}>
             <div style={{ fontFamily: 'var(--font-heading)', fontSize: 20, fontVariantNumeric: 'tabular-nums' }}>{s.value}</div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '8.5px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--color-neutral-600)', marginTop: 3 }}>{s.label}</div>
@@ -367,7 +367,7 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
                 <div key={event.id} style={{
                   borderRadius: 'var(--radius-md)',
                   border: `1px solid ${isMilestone ? 'var(--color-accent-300)' : 'var(--color-divider)'}`,
-                  background: isMilestone ? 'var(--color-accent-100)' : '#f3f2f2',
+                  background: isMilestone ? 'var(--color-accent-100)' : 'var(--color-card)',
                   padding: 'var(--space-3)',
                   animation: 'pw-fade-up 0.4s ease-out both',
                 }}>
@@ -443,7 +443,7 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
                   flex: 1, marginBottom: 8,
                   borderRadius: 'var(--radius-md)',
                   border: `1px solid ${hop.flagged ? 'var(--color-accent-300)' : 'var(--color-divider)'}`,
-                  background: hop.flagged ? 'var(--color-accent-100)' : '#f3f2f2',
+                  background: hop.flagged ? 'var(--color-accent-100)' : 'var(--color-card)',
                   padding: 'var(--space-3)',
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -488,13 +488,13 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {analyses.map((a, i) => {
-              const riskColor = a.risk_level === 'high' ? '#8b3a3a' : a.risk_level === 'medium' ? 'var(--color-accent-700)' : 'var(--color-neutral-600)';
-              const riskBg = a.risk_level === 'high' ? '#fdf0f0' : a.risk_level === 'medium' ? 'var(--color-accent-100)' : 'var(--color-neutral-100)';
+              const riskColor = a.risk_level === 'high' ? 'var(--color-error)' : a.risk_level === 'medium' ? 'var(--color-accent-700)' : 'var(--color-neutral-600)';
+              const riskBg = a.risk_level === 'high' ? 'var(--color-error-bg)' : a.risk_level === 'medium' ? 'var(--color-accent-100)' : 'var(--color-neutral-100)';
 
               return (
                 <div key={i} style={{
                   borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)',
-                  background: '#f3f2f2', padding: 'var(--space-3)',
+                  background: 'var(--color-card)', padding: 'var(--space-3)',
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--color-accent-700)' }}>

@@ -53,7 +53,7 @@ export default function Memory() {
 
   return (
     <DashboardShell>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)', width: '100%' }}>
         <div>
           <h1 style={{ fontSize: 'clamp(34px, 3.4vw, 46px)', fontWeight: 400, letterSpacing: '-0.02em', margin: 0, fontFamily: 'var(--font-heading)' }}>
             Sibyl Memory
@@ -75,7 +75,7 @@ export default function Memory() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="0x… or pattern name"
             style={{
-              width: 220, padding: '8px 12px',
+              width: 220, maxWidth: '100%', padding: '8px 12px',
               borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)',
               background: 'var(--color-card)', fontFamily: 'var(--font-mono)', fontSize: 12,
               color: 'var(--color-text)', outline: 'none',
@@ -106,7 +106,7 @@ export default function Memory() {
           </div>
         ) : (
           filtered.map((entry, i) => (
-            <div key={i} style={{
+            <div key={i} className="pw-memory-row" style={{
               display: 'grid', gridTemplateColumns: '140px 1fr 100px',
               alignItems: 'center', gap: 'var(--space-3)',
               padding: 'var(--space-3) 0',

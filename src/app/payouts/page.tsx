@@ -46,7 +46,8 @@ export default function Payouts() {
         Escrow releases on Base Sepolia. Testnet funds only.
       </p>
 
-      {/* Table header */}
+      {/* Table */}
+      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
       <div style={{
         display: 'grid', gridTemplateColumns: '100px 1fr 100px 120px 120px', minWidth: 560,
         gap: 'var(--space-3)', padding: '0 0 var(--space-3) 0',
@@ -93,6 +94,7 @@ export default function Payouts() {
           </div>
         ))
       )}
+      </div>
     </DashboardShell>
   );
 }

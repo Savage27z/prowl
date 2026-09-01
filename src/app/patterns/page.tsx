@@ -49,7 +49,7 @@ export default function Patterns() {
       </p>
 
       {loading ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-4)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--space-4)' }}>
           {[1,2,3].map(i => (
             <div key={i} style={{ height: 180, borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)', background: 'var(--color-neutral-100)', animation: 'pw-fade 1s infinite alternate' }} />
           ))}
@@ -70,7 +70,7 @@ export default function Patterns() {
           {patterns.map((p) => (
             <div key={p.id} style={{
               borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)',
-              background: '#f3f2f2', padding: 'var(--space-4)',
+              background: 'var(--color-card)', padding: 'var(--space-4)',
               display: 'flex', flexDirection: 'column', gap: 10,
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
