@@ -1,3 +1,4 @@
+// New Bounty — form to submit investigation requests
 'use client';
 
 import { useState } from 'react';
