@@ -1,3 +1,4 @@
+// Monitor API — trigger watchlist checks and get status
 // Monitor API — check watchlist and trigger checks
 import { NextRequest, NextResponse } from 'next/server';
 import { MonitorAgent } from '@/agents/monitor';
