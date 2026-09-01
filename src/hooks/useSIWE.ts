@@ -58,28 +58,28 @@ export function useSIWE() {
       const nonceRes = await fetch('/api/auth/nonce');
       const { nonce } = await nonceRes.json();
 
-      // 2. Create SIWE message fields
-      const messageFields = {
+      // 2. Create SIWE message
+      const message = new SiweMessage({
         domain: window.location.host,
         address,
         statement: 'Sign in to Prowl - AI Crypto Investigation Swarm',
         uri: window.location.origin,
-        version: '1' as const,
+        version: '1',
         chainId,
         nonce,
-      };
+        issuedAt: new Date().toISOString(),
+      });
 
-      const message = new SiweMessage(messageFields);
       const messageString = message.prepareMessage();
 
       // 3. Sign the message
       const signature = await signMessageAsync({ message: messageString });
 
-      // 4. Verify on server — send fields object, not the prepared string
+      // 4. Verify on server — send prepared string + signature
       const verifyRes = await fetch('/api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: messageFields, signature }),
+        body: JSON.stringify({ message: messageString, signature }),
       });
 
       const result = await verifyRes.json();
