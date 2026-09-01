@@ -1,3 +1,4 @@
+// AI reasoning wrapper — connects to OpenRouter for DeepSeek
 // AI model wrapper — uses OpenRouter for model access
 // Default: DeepSeek (cheap and good for investigation reasoning)
 
