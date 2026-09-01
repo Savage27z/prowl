@@ -1,3 +1,4 @@
+// Shared utility functions — classnames, formatting, etc.
 // Utility functions
 
 export function cn(...classes: (string | boolean | undefined | null)[]): string {
