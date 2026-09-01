@@ -1,3 +1,4 @@
+// Patterns API — retrieve detected attack patterns
 // Pattern Library API — query learned patterns
 import { NextResponse } from 'next/server';
 import { getSibylMemory } from '@/memory/sibyl';
