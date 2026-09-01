@@ -1,3 +1,4 @@
+// SquashHamburger — animated mobile menu toggle button
 'use client';
 
 import { motion } from 'framer-motion';
