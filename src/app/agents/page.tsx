@@ -1,3 +1,4 @@
+// Agents — swarm status dashboard and controls
 'use client';
 
 import { useState, useEffect } from 'react';
