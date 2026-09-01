@@ -1,3 +1,4 @@
+// Investigation API — start new cases and list existing ones
 // POST /api/investigate — Start a new investigation
 // GET  /api/investigate — List cases + stats
 
