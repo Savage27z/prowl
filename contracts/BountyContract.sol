@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
 /// @title ProwlBounty — Onchain bounty escrow for crypto theft investigations
@@ -24,8 +23,18 @@ contract ProwlBounty {
     }
 
     uint256 public bountyCount;
+    uint256 public openBountyCount;
     uint256 public constant MIN_STAKE = 0.001 ether;
     uint256 public constant TIMEOUT_PERIOD = 7 days;
+
+    /// @dev Simple reentrancy lock
+    uint256 private _locked = 1;
+    modifier nonReentrant() {
+        require(_locked == 1, "Reentrant call");
+        _locked = 2;
+        _;
+        _locked = 1;
+    }
 
     mapping(uint256 => Bounty) public bounties;
     mapping(address => uint256) public agentStakes;
@@ -52,6 +61,7 @@ contract ProwlBounty {
         require(incidentTxHash != bytes32(0), "Invalid tx hash");
 
         bountyId = bountyCount++;
+        openBountyCount++;
 
         bounties[bountyId] = Bounty({
             poster: msg.sender,
@@ -82,6 +92,7 @@ contract ProwlBounty {
         bounty.status = Status.Claimed;
         bounty.claimedAt = block.timestamp;
         agentStakes[msg.sender] += msg.value;
+        openBountyCount--;
 
         emit BountyClaimed(bountyId, msg.sender);
     }
@@ -103,23 +114,25 @@ contract ProwlBounty {
     }
 
     /// @notice Bounty poster approves the report and releases reward
-    function approvePayout(uint256 bountyId) external {
+    function approvePayout(uint256 bountyId) external nonReentrant {
         Bounty storage bounty = bounties[bountyId];
         require(bounty.status == Status.Submitted, "Report not submitted");
         require(msg.sender == bounty.poster, "Only poster can approve");
 
         bounty.status = Status.Approved;
         uint256 reward = bounty.reward;
-        uint256 stake = agentStakes[bounty.claimedBy];
+        address agent = bounty.claimedBy;
+        uint256 stake = agentStakes[agent];
 
-        // Return stake and pay reward
-        agentStakes[bounty.claimedBy] = 0;
+        // Effects before interaction (checks-effects-interactions)
+        agentStakes[agent] = 0;
         uint256 totalPayout = reward + stake;
 
-        (bool success, ) = payable(bounty.claimedBy).call{value: totalPayout}("");
+        // Interaction
+        (bool success, ) = payable(agent).call{value: totalPayout}("");
         require(success, "Payout failed");
 
-        emit PayoutReleased(bountyId, bounty.claimedBy, reward);
+        emit PayoutReleased(bountyId, agent, reward);
     }
 
     /// @notice Bounty poster disputes the report
@@ -133,7 +146,7 @@ contract ProwlBounty {
     }
 
     /// @notice Auto-approve after timeout (7 days with no response from poster)
-    function resolveTimeout(uint256 bountyId) external {
+    function resolveTimeout(uint256 bountyId) external nonReentrant {
         Bounty storage bounty = bounties[bountyId];
         require(bounty.status == Status.Submitted, "Report not submitted");
         require(
@@ -143,14 +156,18 @@ contract ProwlBounty {
 
         bounty.status = Status.Approved;
         uint256 reward = bounty.reward;
-        uint256 stake = agentStakes[bounty.claimedBy];
-        agentStakes[bounty.claimedBy] = 0;
+        address agent = bounty.claimedBy;
+        uint256 stake = agentStakes[agent];
+
+        // Effects before interaction
+        agentStakes[agent] = 0;
         uint256 totalPayout = reward + stake;
 
-        (bool success, ) = payable(bounty.claimedBy).call{value: totalPayout}("");
+        // Interaction
+        (bool success, ) = payable(agent).call{value: totalPayout}("");
         require(success, "Payout failed");
 
-        emit PayoutReleased(bountyId, bounty.claimedBy, reward);
+        emit PayoutReleased(bountyId, agent, reward);
     }
 
     /// @notice Get bounty details
@@ -158,10 +175,8 @@ contract ProwlBounty {
         return bounties[bountyId];
     }
 
-    /// @notice Get all open bounties count
-    function getOpenBountyCount() external view returns (uint256 count) {
-        for (uint256 i = 0; i < bountyCount; i++) {
-            if (bounties[i].status == Status.Open) count++;
-        }
+    /// @notice Get all open bounties count (O(1) — uses tracked counter)
+    function getOpenBountyCount() external view returns (uint256) {
+        return openBountyCount;
     }
 }
