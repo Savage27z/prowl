@@ -1,3 +1,5 @@
+// ChainReader — abstraction layer for Base chain data
+// Supports both direct RPC calls and Basescan API
 // Base chain data reader
 // Reads transaction data, wallet balances, and contract info from Base
 
