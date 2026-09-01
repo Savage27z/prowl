@@ -1,3 +1,5 @@
+// Virtuals Protocol ACP — Agent Commerce Protocol integration
+// Enables agents to trade services on the Virtuals marketplace
 /**
  * Virtuals Protocol ACP (Agent Commerce Protocol) Integration
  *
