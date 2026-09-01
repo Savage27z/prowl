@@ -1,0 +1,3 @@
+sibyl-memory-client
+flask
+flask-cors
