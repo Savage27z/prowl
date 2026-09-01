@@ -1,3 +1,4 @@
+// ProwlLogo — animated SVG logo with glow effect
 'use client';
 
 interface ProwlLogoProps {
