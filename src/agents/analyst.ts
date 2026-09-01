@@ -117,9 +117,9 @@ export class AnalystAgent {
         notes.push(`Matches known pattern: ${pattern.description}`);
 
         // Increment pattern match count
-        await this.memory.update<Pattern>(COLLECTIONS.PATTERNS, pattern.pattern_id, {
+        await this.memory.update(COLLECTIONS.PATTERNS, pattern.pattern_id, {
           times_matched: pattern.times_matched + 1,
-        } as Partial<Pattern> & Record<string, unknown>);
+        });
       }
     }
 
