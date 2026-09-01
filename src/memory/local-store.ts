@@ -1,3 +1,4 @@
+// Local Store — in-memory storage for development and testing
 // Local in-memory store for development/demo
 // Drop-in replacement for Sibyl Memory API when developing offline
 // This gets swapped for real Sibyl in production
