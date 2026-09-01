@@ -1,3 +1,4 @@
+// FundFlowGraph — interactive transaction flow visualization
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
