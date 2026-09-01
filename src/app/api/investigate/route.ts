@@ -4,15 +4,59 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getSharedCoordinator } from '@/agents/shared';
+import { isValidAddress, isValidTxHash } from '@/chain/utils';
+
+// Simple in-memory rate limiter: max 5 investigations per minute
+const recentRequests: number[] = [];
+const RATE_LIMIT = 5;
+const RATE_WINDOW = 60_000;
+
+function checkRateLimit(): boolean {
+  const now = Date.now();
+  // Remove entries older than the window
+  while (recentRequests.length > 0 && recentRequests[0] < now - RATE_WINDOW) {
+    recentRequests.shift();
+  }
+  if (recentRequests.length >= RATE_LIMIT) return false;
+  recentRequests.push(now);
+  return true;
+}
 
 export async function POST(req: NextRequest) {
   try {
+    if (!checkRateLimit()) {
+      return NextResponse.json(
+        { error: 'Rate limited — max 5 investigations per minute' },
+        { status: 429 },
+      );
+    }
     const body = await req.json();
     const { bountyId, victimWallet, incidentTx, reward, description } = body;
 
     if (!victimWallet || !incidentTx) {
       return NextResponse.json(
         { error: 'victimWallet and incidentTx are required' },
+        { status: 400 },
+      );
+    }
+
+    if (!isValidAddress(victimWallet)) {
+      return NextResponse.json(
+        { error: 'Invalid wallet address format — expected 0x followed by 40 hex characters' },
+        { status: 400 },
+      );
+    }
+
+    if (!isValidTxHash(incidentTx)) {
+      return NextResponse.json(
+        { error: 'Invalid transaction hash format — expected 0x followed by 64 hex characters' },
+        { status: 400 },
+      );
+    }
+
+    if (description && typeof description === 'string' && description.length > 2000) {
+      return NextResponse.json(
+        { error: 'Description must be under 2000 characters' },
         { status: 400 },
       );
     }
