@@ -1,3 +1,4 @@
+// Seed API — populate database with demo investigation data
 // POST /api/seed — Populate memory with sample data for demo
 // Seeds patterns + solved cases so the Analyst has data to match against
 
