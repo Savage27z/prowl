@@ -211,3 +211,7 @@ No code was reused from these projects.
 ## License
 
 MIT
+
+---
+
+Built for the Sibyl Labs Hackathon — September 2026
