@@ -228,11 +228,11 @@ export class TracerAgent {
 
   private async updateCase(caseId: string, newHops: Hop[]): Promise<void> {
     const totalAmount = newHops.reduce((sum, h) => sum + parseFloat(h.amount), 0);
-    await this.memory.update<Case>(COLLECTIONS.CASES, caseId, {
+    await this.memory.update(COLLECTIONS.CASES, caseId, {
       total_hops_traced: newHops.length,
       total_funds_traced: `${totalAmount.toFixed(6)} ETH`,
       agents_involved: ['tracer'],
-    } as Partial<Case> & Record<string, unknown>);
+    });
   }
 
   private determineStatus(hops: Hop[]): TraceResult['status'] {
