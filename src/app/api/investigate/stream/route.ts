@@ -1,3 +1,4 @@
+// SSE Stream — real-time investigation event broadcasting
 // GET /api/investigate/stream — SSE endpoint for real-time investigation updates
 // Frontend connects here to watch agents work in real time
 
