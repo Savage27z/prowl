@@ -1,13 +1,11 @@
-// Sibyl Memory SDK wrapper
-// Abstraction layer over Sibyl Memory REST API
-// Swap implementation when official JS SDK is available
+// Sibyl Memory — unified interface
+// Mode 1 (default): in-memory store — works instantly, no deps
+// Mode 2 (SIBYL_BRIDGE_URL set): forwards to Python sibyl-memory-client bridge
+// All 3 agents + API routes import getSibylMemory() — one interface, swappable backend
 
 import { COLLECTIONS, type CollectionName } from './schemas';
 
-interface SibylConfig {
-  apiKey: string;
-  endpoint: string;
-}
+const BRIDGE_URL = process.env.SIBYL_BRIDGE_URL || ''; // e.g. http://localhost:4001
 
 interface QueryOptions {
   filter?: Record<string, unknown>;
@@ -15,198 +13,240 @@ interface QueryOptions {
   sort?: { field: string; order: 'asc' | 'desc' };
 }
 
-class SibylMemory {
-  private config: SibylConfig;
-  private initialized = false;
+// ─── In-memory store (Mode 1) ───────────────────────────────────
 
-  constructor(config?: Partial<SibylConfig>) {
-    this.config = {
-      apiKey: config?.apiKey || process.env.SIBYL_API_KEY || '',
-      endpoint: config?.endpoint || process.env.SIBYL_ENDPOINT || 'https://api.sibyllabs.org',
-    };
+interface StoredDoc {
+  id: string;
+  data: Record<string, unknown>;
+  ts: string;
+}
+
+const _store = new Map<string, Map<string, StoredDoc>>();
+
+function col(name: CollectionName): Map<string, StoredDoc> {
+  if (!_store.has(name)) _store.set(name, new Map());
+  return _store.get(name)!;
+}
+
+function genId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+// ─── Sibyl Bridge helpers (Mode 2) ──────────────────────────────
+
+async function bridgeFetch(
+  path: string,
+  opts?: { method?: string; body?: unknown },
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any> {
+  const res = await fetch(`${BRIDGE_URL}${path}`, {
+    method: opts?.method || 'GET',
+    headers: { 'Content-Type': 'application/json' },
+    body: opts?.body ? JSON.stringify(opts.body) : undefined,
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`Bridge ${res.status}: ${txt}`);
   }
+  return res.json();
+}
 
-  async init(): Promise<void> {
-    if (this.initialized) return;
+// ─── Local-memory implementation ────────────────────────────────
 
-    // Initialize collections
-    for (const collection of Object.values(COLLECTIONS)) {
-      await this.ensureCollection(collection);
-    }
+const localMemory = {
+  async store(collection: CollectionName, document: Record<string, unknown>, id?: string): Promise<string> {
+    const docId = id || genId();
+    col(collection).set(docId, { id: docId, data: { ...document }, ts: new Date().toISOString() });
+    console.log(`[Memory] stored  ${collection}/${docId}`);
+    return docId;
+  },
 
-    this.initialized = true;
-    console.log('[Sibyl] Memory initialized with collections:', Object.values(COLLECTIONS));
-  }
-
-  private async ensureCollection(name: string): Promise<void> {
-    try {
-      await this.request('POST', `/collections`, { name, type: 'document' });
-    } catch {
-      // Collection may already exist
-    }
-  }
-
-  // Store a document in a collection
-  async store<T extends Record<string, unknown>>(
-    collection: CollectionName,
-    document: T,
-    id?: string
-  ): Promise<string> {
-    const docId = id || this.generateId();
-    const result = await this.request('POST', `/collections/${collection}/documents`, {
-      id: docId,
-      data: document,
-      timestamp: new Date().toISOString(),
-    });
-    console.log(`[Sibyl] Stored document in ${collection}: ${docId}`);
-    return result?.id || docId;
-  }
-
-  // Retrieve a document by ID
   async retrieve<T>(collection: CollectionName, id: string): Promise<T | null> {
-    try {
-      const result = await this.request('GET', `/collections/${collection}/documents/${id}`);
-      return result?.data as T || null;
-    } catch {
-      return null;
-    }
-  }
+    const doc = col(collection).get(id);
+    return doc ? (doc.data as unknown as T) : null;
+  },
 
-  // Query documents in a collection
   async query<T>(collection: CollectionName, options?: QueryOptions): Promise<T[]> {
-    const params = new URLSearchParams();
-    if (options?.filter) params.set('filter', JSON.stringify(options.filter));
-    if (options?.limit) params.set('limit', String(options.limit));
-    if (options?.sort) params.set('sort', `${options.sort.field}:${options.sort.order}`);
+    let results = Array.from(col(collection).values()).map((d) => d.data as unknown as T);
+    if (options?.filter) {
+      const entries = Object.entries(options.filter);
+      results = results.filter((item) => {
+        const rec = item as Record<string, unknown>;
+        return entries.every(([k, v]) => rec[k] === v);
+      });
+    }
+    if (options?.sort) {
+      const { field, order } = options.sort;
+      results.sort((a, b) => {
+        const av = (a as Record<string, unknown>)[field];
+        const bv = (b as Record<string, unknown>)[field];
+        if (av === bv) return 0;
+        const cmp = av! < bv! ? -1 : 1;
+        return order === 'asc' ? cmp : -cmp;
+      });
+    }
+    if (options?.limit) results = results.slice(0, options.limit);
+    return results;
+  },
 
-    const result = await this.request('GET', `/collections/${collection}/documents?${params}`);
-    return (result?.documents || []).map((doc: { data: T }) => doc.data);
-  }
+  async update(collection: CollectionName, id: string, updates: Record<string, unknown>): Promise<void> {
+    const c = col(collection);
+    const doc = c.get(id);
+    if (!doc) {
+      c.set(id, { id, data: { ...updates }, ts: new Date().toISOString() });
+    } else {
+      doc.data = { ...doc.data, ...updates };
+      doc.ts = new Date().toISOString();
+    }
+    console.log(`[Memory] updated ${collection}/${id}`);
+  },
 
-  // Update a document
-  async update<T extends Record<string, unknown>>(
-    collection: CollectionName,
-    id: string,
-    updates: Partial<T>
-  ): Promise<void> {
-    await this.request('PATCH', `/collections/${collection}/documents/${id}`, {
-      data: updates,
-      updated_at: new Date().toISOString(),
-    });
-    console.log(`[Sibyl] Updated document in ${collection}: ${id}`);
-  }
-
-  // Delete a document
   async delete(collection: CollectionName, id: string): Promise<void> {
-    await this.request('DELETE', `/collections/${collection}/documents/${id}`);
-    console.log(`[Sibyl] Deleted document from ${collection}: ${id}`);
-  }
+    col(collection).delete(id);
+  },
 
-  // Clear all data from a collection (for deletion test demo)
   async clearCollection(collection: CollectionName): Promise<void> {
-    await this.request('DELETE', `/collections/${collection}/documents`);
-    console.log(`[Sibyl] Cleared collection: ${collection}`);
-  }
+    _store.set(collection, new Map());
+    console.log(`[Memory] cleared ${collection}`);
+  },
 
-  // Clear ALL memory (for deletion test demo)
   async clearAll(): Promise<void> {
-    for (const collection of Object.values(COLLECTIONS)) {
-      await this.clearCollection(collection);
-    }
-    console.log('[Sibyl] ALL MEMORY CLEARED — agents will fail without coordination data');
-  }
+    for (const name of Object.values(COLLECTIONS)) _store.set(name, new Map());
+    console.log('[Memory] ALL CLEARED — agents cannot coordinate');
+  },
 
-  // Search across collections (semantic/keyword)
   async search<T>(query: string, collections?: CollectionName[]): Promise<T[]> {
-    const targetCollections = collections || Object.values(COLLECTIONS);
-    const result = await this.request('POST', `/search`, {
-      query,
-      collections: targetCollections,
-      limit: 20,
-    });
-    return (result?.results || []).map((r: { data: T }) => r.data);
-  }
-
-  // Get collection stats
-  async stats(collection: CollectionName): Promise<{ count: number; lastUpdated: string | null }> {
-    try {
-      const result = await this.request('GET', `/collections/${collection}/stats`);
-      return {
-        count: result?.count || 0,
-        lastUpdated: result?.last_updated || null,
-      };
-    } catch {
-      return { count: 0, lastUpdated: null };
-    }
-  }
-
-  // Check if memory is operational (for deletion test)
-  async healthCheck(): Promise<{
-    operational: boolean;
-    collections: Record<string, number>;
-  }> {
-    const collections: Record<string, number> = {};
-    let operational = true;
-
-    for (const [key, name] of Object.entries(COLLECTIONS)) {
-      try {
-        const stat = await this.stats(name);
-        collections[key] = stat.count;
-      } catch {
-        collections[key] = -1;
-        operational = false;
+    const targets = collections || (Object.values(COLLECTIONS) as CollectionName[]);
+    const lq = query.toLowerCase();
+    const out: T[] = [];
+    for (const name of targets) {
+      for (const doc of col(name).values()) {
+        if (JSON.stringify(doc.data).toLowerCase().includes(lq)) out.push(doc.data as unknown as T);
       }
     }
+    return out;
+  },
 
-    return { operational, collections };
-  }
+  async stats(collection: CollectionName): Promise<{ count: number; lastUpdated: string | null }> {
+    const c = col(collection);
+    if (c.size === 0) return { count: 0, lastUpdated: null };
+    const latest = Array.from(c.values()).sort((a, b) => b.ts.localeCompare(a.ts))[0];
+    return { count: c.size, lastUpdated: latest?.ts || null };
+  },
 
-  private async request(method: string, path: string, body?: unknown): Promise<Record<string, unknown>> {
-    const url = `${this.config.endpoint}${path}`;
+  async healthCheck(): Promise<{ operational: boolean; collections: Record<string, number> }> {
+    const out: Record<string, number> = {};
+    for (const [key, name] of Object.entries(COLLECTIONS)) out[key] = col(name).size;
+    return { operational: true, collections: out };
+  },
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (this.config.apiKey) {
-      headers['Authorization'] = `Bearer ${this.config.apiKey}`;
+  dump(): Record<string, Record<string, unknown>[]> {
+    const out: Record<string, Record<string, unknown>[]> = {};
+    for (const [key, name] of Object.entries(COLLECTIONS)) {
+      out[key] = Array.from(col(name).values()).map((d) => d.data);
     }
+    return out;
+  },
+};
 
-    const response = await fetch(url, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
+// ─── Sibyl Bridge implementation ────────────────────────────────
+
+const bridgeMemory = {
+  async store(collection: CollectionName, document: Record<string, unknown>, id?: string): Promise<string> {
+    const docId = id || genId();
+    await bridgeFetch('/entity', {
+      method: 'POST',
+      body: { category: collection, name: docId, data: document },
     });
+    // Also write to local cache so query/dump work immediately
+    localMemory.store(collection, document, docId);
+    console.log(`[Sibyl] stored  ${collection}/${docId}`);
+    return docId;
+  },
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unknown error');
-      throw new Error(`Sibyl API error ${response.status}: ${errorText}`);
+  async retrieve<T>(collection: CollectionName, id: string): Promise<T | null> {
+    try {
+      const res = await bridgeFetch(`/entity?category=${collection}&name=${encodeURIComponent(id)}`);
+      return (res?.data as T) ?? null;
+    } catch {
+      // Fall back to local cache
+      return localMemory.retrieve<T>(collection, id);
     }
+  },
 
-    if (response.status === 204) return {};
+  // query/sort/filter are done locally (Sibyl doesn't have a SQL-like query API)
+  // but we sync from Sibyl on startup via list
+  async query<T>(collection: CollectionName, options?: QueryOptions): Promise<T[]> {
+    return localMemory.query<T>(collection, options);
+  },
 
-    return response.json();
+  async update(collection: CollectionName, id: string, updates: Record<string, unknown>): Promise<void> {
+    // Read-modify-write through bridge
+    const existing = await this.retrieve<Record<string, unknown>>(collection, id);
+    const merged = { ...(existing || {}), ...updates };
+    await bridgeFetch('/entity', {
+      method: 'POST',
+      body: { category: collection, name: id, data: merged },
+    });
+    localMemory.update(collection, id, updates);
+    console.log(`[Sibyl] updated ${collection}/${id}`);
+  },
+
+  async delete(collection: CollectionName, id: string): Promise<void> {
+    await bridgeFetch(`/entity?category=${collection}&name=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    localMemory.delete(collection, id);
+  },
+
+  async clearCollection(collection: CollectionName): Promise<void> {
+    await bridgeFetch(`/clear?categories=${collection}`, { method: 'DELETE' });
+    localMemory.clearCollection(collection);
+    console.log(`[Sibyl] cleared ${collection}`);
+  },
+
+  async clearAll(): Promise<void> {
+    await bridgeFetch('/clear', { method: 'DELETE' });
+    localMemory.clearAll();
+    console.log('[Sibyl] ALL CLEARED — agents cannot coordinate');
+  },
+
+  async search<T>(query: string, collections?: CollectionName[]): Promise<T[]> {
+    try {
+      const res = await bridgeFetch(`/search?q=${encodeURIComponent(query)}`);
+      return (res?.results || []) as T[];
+    } catch {
+      return localMemory.search<T>(query, collections);
+    }
+  },
+
+  async stats(collection: CollectionName): Promise<{ count: number; lastUpdated: string | null }> {
+    return localMemory.stats(collection);
+  },
+
+  async healthCheck(): Promise<{ operational: boolean; collections: Record<string, number> }> {
+    try {
+      const res = await bridgeFetch('/health');
+      const local = await localMemory.healthCheck();
+      return { operational: res?.ok === true, collections: local.collections };
+    } catch {
+      return { operational: false, collections: {} };
+    }
+  },
+
+  dump(): Record<string, Record<string, unknown>[]> {
+    return localMemory.dump();
+  },
+};
+
+// ─── Export ─────────────────────────────────────────────────────
+
+export type MemoryAPI = typeof localMemory;
+
+export function getSibylMemory(): MemoryAPI {
+  if (BRIDGE_URL) {
+    console.log(`[Memory] Using Sibyl bridge at ${BRIDGE_URL}`);
+    return bridgeMemory;
   }
-
-  private generateId(): string {
-    return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-  }
+  return localMemory;
 }
 
-// Singleton instance
-let instance: SibylMemory | null = null;
-
-export function getSibylMemory(config?: Partial<SibylConfig>): SibylMemory {
-  if (!instance) {
-    instance = new SibylMemory(config);
-  }
-  return instance;
-}
-
-// Reset singleton (for testing)
-export function resetSibylMemory(): void {
-  instance = null;
-}
-
-export { SibylMemory };
-export type { SibylConfig, QueryOptions };
+export type { QueryOptions };
