@@ -1,3 +1,4 @@
+// Landing Page — Prowl hero section, features, and call-to-action
 'use client';
 
 import { useState, useEffect, useRef, type ReactNode, type CSSProperties } from 'react';
