@@ -268,7 +268,8 @@ export class ChainReader {
 
   private weiToEth(weiHex: string): string {
     const wei = BigInt(weiHex || '0');
-    const eth = Number(wei) / 1e18;
+    // Divide by 10^12 first (stays within safe integer range), then by 10^6
+    const eth = Number(wei / BigInt('1000000000000')) / 1e6;
     return eth.toFixed(6);
   }
 }
