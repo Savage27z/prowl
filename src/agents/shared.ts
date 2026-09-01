@@ -1,4 +1,4 @@
-// Shared coordinator singleton
+// Shared coordinator singleton — ensures SSE and API share one instance
 // Both the SSE stream and the investigate API route use this
 // so events flow through a single coordinator to all connected clients
 
