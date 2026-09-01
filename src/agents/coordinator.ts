@@ -1,3 +1,4 @@
+// Coordinator — orchestrates the Tracer→Analyst→Monitor pipeline
 // Agent Coordinator — orchestrates Tracer, Analyst, and Monitor
 // Manages the investigation lifecycle through Sibyl Memory
 
