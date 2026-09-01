@@ -1,3 +1,4 @@
+// AgentActivity — real-time display of agent actions and status
 'use client';
 
 import { formatDate } from '@/lib/utils';
