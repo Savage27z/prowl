@@ -1,3 +1,4 @@
+// Monitor Agent — persistent wallet surveillance and alerts
 // Agent 3: Monitor
 // Watches dormant wallets and resumes investigation when funds move
 // Reads Tracer's dead ends from Sibyl Memory, writes alerts back
