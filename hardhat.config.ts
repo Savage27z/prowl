@@ -1,3 +1,4 @@
+// Hardhat Configuration — Base mainnet and Sepolia testnet
 import type { HardhatUserConfig } from 'hardhat/config';
 import '@nomicfoundation/hardhat-toolbox';
 import * as dotenv from 'dotenv';
