@@ -1,3 +1,4 @@
+// Seed — populate local store with realistic demo data
 // Seed script — populates Sibyl Memory with sample patterns and cases
 // Run before demo to make Analyst have patterns to match against
 
