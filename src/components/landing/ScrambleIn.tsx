@@ -1,3 +1,4 @@
+// ScrambleIn — entrance animation with scramble reveal effect
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
