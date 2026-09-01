@@ -1,3 +1,4 @@
+// BountyContract — ABI and TypeScript types for onchain escrow
 // Smart contract interaction layer for BountyContract on Base
 
 const BOUNTY_CONTRACT_ABI = [
