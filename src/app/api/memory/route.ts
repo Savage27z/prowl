@@ -24,7 +24,16 @@ export async function GET() {
 }
 
 // DELETE /api/memory — Clear all memory (deletion test)
+// Protected: requires ?confirm=yes to prevent accidental wipes
 export async function DELETE(req: NextRequest) {
+  const confirm = req.nextUrl.searchParams.get('confirm');
+  if (confirm !== 'yes') {
+    return NextResponse.json(
+      { error: 'Destructive action — pass ?confirm=yes to proceed', warning: 'This will erase all agent coordination data.' },
+      { status: 400 },
+    );
+  }
+
   const collection = req.nextUrl.searchParams.get('collection');
 
   try {
