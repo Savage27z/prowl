@@ -176,10 +176,11 @@ export async function rejectJob(jobId: number, reason?: string): Promise<void> {
 export async function pollAndRouteJobs(
   coordinator: {
     startInvestigation: (
-      txHash: string,
+      bountyId: string,
       victimWallet: string,
-      description: string,
+      incidentTx: string,
       reward: string,
+      description?: string,
     ) => Promise<string>;
   },
 ): Promise<JobResult[]> {
@@ -198,10 +199,11 @@ export async function pollAndRouteJobs(
     await acceptJob(job.id);
 
     const caseId = await coordinator.startInvestigation(
-      params.txHash,
+      `acp-${job.id}`,
       params.victimWallet,
+      params.txHash,
+      params.reward || '0 ETH',
       params.description || `ACP Job #${job.id}`,
-      params.reward || '0',
     );
 
     results.push({ jobId: job.id, caseId, status: 'investigating' });
