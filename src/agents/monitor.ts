@@ -111,9 +111,9 @@ export class MonitorAgent {
 
       // Update last_checked
       const watchId = `${entry.case_id}-watch-${entry.address.slice(0, 10)}`;
-      await this.memory.update<WatchlistEntry>(COLLECTIONS.WATCHLIST, watchId, {
+      await this.memory.update(COLLECTIONS.WATCHLIST, watchId, {
         last_checked: new Date().toISOString(),
-      } as Partial<WatchlistEntry> & Record<string, unknown>);
+      });
 
       if (result.hasNewActivity && result.latestTx) {
         const lastCheckedTime = new Date(entry.last_checked).getTime();
@@ -126,18 +126,18 @@ export class MonitorAgent {
           console.log(`[Monitor] Amount: ${result.latestTx.value} ETH → ${result.latestTx.to}`);
 
           // Update watchlist entry
-          await this.memory.update<WatchlistEntry>(COLLECTIONS.WATCHLIST, watchId, {
+          await this.memory.update(COLLECTIONS.WATCHLIST, watchId, {
             status: 'moved',
             alert_sent: true,
-          } as Partial<WatchlistEntry> & Record<string, unknown>);
+          });
 
           // Write alert to memory for Tracer to pick up
           await this.writeAlert(entry.case_id, entry.address, result.latestTx);
 
           // Update case status
-          await this.memory.update<Case>(COLLECTIONS.CASES, entry.case_id, {
+          await this.memory.update(COLLECTIONS.CASES, entry.case_id, {
             status: 'active',
-          } as Partial<Case> & Record<string, unknown>);
+          });
 
           const alertEntry = { ...entry, status: 'moved' as const, alert_sent: true };
           alerts.push(alertEntry);
@@ -181,10 +181,10 @@ export class MonitorAgent {
 
         if (txTime > lastCheckedTime) {
           const watchId = `${entry.case_id}-watch-${entry.address.slice(0, 10)}`;
-          await this.memory.update<WatchlistEntry>(COLLECTIONS.WATCHLIST, watchId, {
+          await this.memory.update(COLLECTIONS.WATCHLIST, watchId, {
             status: 'moved',
             alert_sent: true,
-          } as Partial<WatchlistEntry> & Record<string, unknown>);
+          });
 
           await this.writeAlert(entry.case_id, entry.address, result.latestTx);
           alerts.push({ ...entry, status: 'moved', alert_sent: true });
