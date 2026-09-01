@@ -1,3 +1,5 @@
+# Sibyl Bridge Server
+# Flask proxy for real Sibyl Memory API
 """
 Sibyl Memory Bridge — thin REST API over sibyl-memory-client
 Runs alongside the Next.js app so TypeScript agents can read/write Sibyl Memory.
