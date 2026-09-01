@@ -77,7 +77,7 @@ export default function Agents() {
           {displayAgents.map((agent) => (
             <div key={agent.abbr} style={{
               borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)',
-              background: '#f3f2f2', padding: 'var(--space-4)',
+              background: 'var(--color-card)', padding: 'var(--space-4)',
               display: 'flex', flexDirection: 'column', gap: 12,
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

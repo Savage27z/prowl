@@ -77,7 +77,7 @@ export default function Memory() {
             style={{
               width: 220, padding: '8px 12px',
               borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)',
-              background: '#f3f2f2', fontFamily: 'var(--font-mono)', fontSize: 12,
+              background: 'var(--color-card)', fontFamily: 'var(--font-mono)', fontSize: 12,
               color: 'var(--color-text)', outline: 'none',
             }}
           />
