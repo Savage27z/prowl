@@ -1,3 +1,4 @@
+// Memory Explorer — browse and query Sibyl memory store
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
