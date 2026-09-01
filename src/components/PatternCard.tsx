@@ -1,3 +1,4 @@
+// PatternCard — attack pattern visualization with risk indicators
 'use client';
 
 interface PatternCardProps {
