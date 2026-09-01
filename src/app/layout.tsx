@@ -1,3 +1,4 @@
+// Root Layout — fonts, metadata, and global providers
 import type { Metadata } from "next";
 import { Space_Mono, Cormorant_Garamond, Lora } from "next/font/google";
 import "./globals.css";
