@@ -1,3 +1,4 @@
+// Virtuals API — ACP service registration and management
 import { NextResponse } from 'next/server';
 import {
   isACPAvailable,
