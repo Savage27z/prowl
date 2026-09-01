@@ -72,7 +72,7 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
             marginBottom: 28,
           }}>
             Prowl uses your Base wallet for authentication.
-            Connect and sign a message to prove ownership — no password needed.
+            Connect and sign a message to prove ownership.
           </p>
 
           <div style={{ display: 'flex', justifyContent: 'center' }}>
