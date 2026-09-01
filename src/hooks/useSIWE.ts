@@ -62,7 +62,7 @@ export function useSIWE() {
       const messageFields = {
         domain: window.location.host,
         address,
-        statement: 'Sign in to Prowl — AI Crypto Investigation Swarm',
+        statement: 'Sign in to Prowl - AI Crypto Investigation Swarm',
         uri: window.location.origin,
         version: '1' as const,
         chainId,
