@@ -9,13 +9,19 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@rainbow-me/rainbowkit": "^2.2.11",
+    "@tanstack/react-query": "^5.102.8",
     "@virtuals-protocol/acp-node-v2": "^0.1.12",
     "framer-motion": "^13.1.1",
+    "iron-session": "^9.0.1",
     "lenis": "^1.1.18",
     "lucide-react": "^1.37.0",
     "next": "16.3.3",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "siwe": "^3.0.0",
+    "viem": "^2.56.1",
+    "wagmi": "^2.19.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
