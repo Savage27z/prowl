@@ -1,150 +1,157 @@
 # Prowl 🐾
 
-An AI investigation swarm that traces stolen crypto on Base. Three specialist agents coordinate through Sibyl Memory to solve onchain bounties.
+**AI investigation swarm that traces stolen crypto on Base.**
 
-## What It Does
+Three specialist agents coordinate through Sibyl Memory to solve onchain bounties — what one case learns, the next one starts with.
 
-Prowl is a coordinated team of AI agents that investigate crypto theft:
-- **🔍 Tracer** follows the money trail across wallets hop-by-hop
-- **🧠 Analyst** matches patterns from past cases and known scam signatures
-- **📡 Monitor** watches dormant wallets and resumes investigations when funds move
+🌐 **Live:** [prowl-ebon.vercel.app](https://prowl-ebon.vercel.app)
 
-Someone posts a bounty ("find where my stolen 2 ETH went"), Prowl's agents pick it up, trace the funds across wallets, match patterns from past cases, monitor dormant addresses, and deliver a full investigation report. Payment releases automatically from smart contract escrow when the case is solved.
+---
+
+## The Problem
+
+Crypto theft is rising, but investigating it requires deep onchain expertise. Victims post on Twitter, hire freelancers, or give up. There's no coordinated, persistent system that learns from every investigation.
+
+## How Prowl Solves It
+
+Prowl is a swarm of AI agents that investigate crypto theft as a team:
+
+| Agent | Role | What It Does |
+|-------|------|-------------|
+| 🔍 **Tracer** | Flow Analysis | Follows stolen funds hop-by-hop across wallets |
+| 🧠 **Analyst** | Pattern Matching | Matches against known scam patterns from past cases |
+| 📡 **Monitor** | Surveillance | Watches dormant wallets, resumes when funds move |
+| 🎯 **Coordinator** | Case Lead | Orchestrates the pipeline: Tracer → Analyst → Monitor |
+
+**The flow:** Someone posts a bounty ("find where my stolen 2 ETH went") → Coordinator assigns Tracer → Tracer follows the money, writes findings to Sibyl Memory → Analyst reads hops, matches patterns → Monitor watches dead ends → Case solved → Reward released from smart contract escrow.
+
+---
 
 ## Where Memory Is Load-Bearing
 
-Memory is the backbone of Prowl. Without it:
-- Agents can't share findings with each other (coordination breaks)
-- No pattern database means no pattern recognition (every case starts from zero)
-- No watchlists means dormant funds are never re-traced
-- Delete memory → run the app → investigation fails completely
+Memory isn't a feature — it's the backbone. Without it:
 
-**Memory writes:** `src/agents/tracer.ts:L45`, `src/agents/analyst.ts:L78`, `src/agents/monitor.ts:L32`
-**Memory reads:** `src/agents/analyst.ts:L55`, `src/agents/tracer.ts:L90`, `src/agents/monitor.ts:L20`
+- **Agents can't coordinate** — Tracer writes hops, Analyst reads them. No memory = no pipeline.
+- **No pattern recognition** — Every case starts from zero. With memory, 5 solved cases make case 6 faster.
+- **No watchlists** — Dormant funds are never re-traced. Monitor needs persistent state.
+- **Delete memory → Investigation fails.** Prove it at `/memory` → Clear All → watch agents stumble.
 
 ### Memory Coordination Flow
 
 ```
-Bounty Posted → Tracer picks it up
+Bounty Posted → Coordinator assigns Tracer
     ↓
-Tracer writes hop data to Sibyl Memory
+Tracer traces funds hop-by-hop → writes to Sibyl Memory
     ↓
-Analyst reads hops, matches against pattern memory
+Analyst reads hops → matches against pattern memory → writes analysis
     ↓
-Analyst writes analysis back to Sibyl Memory
-    ↓
-Tracer reads analysis ("skip this address, known exchange")
+Tracer reads analysis ("skip this address — known exchange")
     ↓
 Tracer hits dead end → writes to memory
     ↓
-Monitor reads dead ends → starts watching
+Monitor reads dead ends → starts watching addresses
     ↓
-Monitor detects movement → writes alert to memory
+Monitor detects movement → writes alert → Tracer resumes
     ↓
-Tracer reads alert → resumes tracing
+Case solved → patterns stored → next case starts smarter
 ```
 
-## How Memory Made This Possible
+**Memory writes:** [`tracer.ts`](src/agents/tracer.ts), [`analyst.ts`](src/agents/analyst.ts), [`monitor.ts`](src/agents/monitor.ts)
+**Memory reads:** [`analyst.ts`](src/agents/analyst.ts), [`tracer.ts`](src/agents/tracer.ts), [`monitor.ts`](src/agents/monitor.ts)
+**Orchestration:** [`coordinator.ts`](src/agents/coordinator.ts)
 
-Prowl's agents coordinate exclusively through Sibyl Memory. Tracer writes hop data, Analyst reads it and writes pattern matches, Monitor reads dead ends and writes alerts. Each case adds new patterns to the shared memory, making ALL future investigations smarter. After 10 cases, pattern matching is 3x faster. This coordination would be impossible without persistent, cross-session memory.
+---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────┐
-│              Next.js Frontend               │
-│   Dashboard · Bounty Form · Case View       │
-│   Fund Flow Graph · Pattern Library         │
-└──────────────────┬──────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│               Next.js Frontend                  │
+│   Dashboard · Cases · Patterns · Sibyl Memory   │
+│   Bounty Form · Agent Status · Payouts          │
+└──────────────────┬──────────────────────────────┘
                    │ SSE + REST API
-┌──────────────────┴──────────────────────────┐
-│             Coordinator Agent               │
-│   Orchestrates: Tracer → Analyst → Monitor  │
-└──────┬───────────┬───────────┬──────────────┘
+┌──────────────────┴──────────────────────────────┐
+│              Coordinator Agent                  │
+│    Orchestrates: Tracer → Analyst → Monitor     │
+└──────┬───────────┬───────────┬──────────────────┘
        │           │           │
   ┌────┴───┐  ┌────┴───┐  ┌───┴────┐
   │ Tracer │  │Analyst │  │Monitor │
-  │  🔍    │  │  🧠    │  │  📡    │
+  │   🔍   │  │   🧠   │  │   📡   │
   └───┬────┘  └───┬────┘  └───┬────┘
       │           │           │
       └─────── Sibyl Memory ──┘
          (shared state store)
               │
      ┌────────┴────────┐
-     │  Python Bridge   │  ← optional (sibyl-memory-client)
-     │  localhost:4001  │
-     └─────────────────┘
-              │
-     ┌────────┴────────┐
-     │  Base L2 Chain   │  ← Basescan API + RPC
-     │  Smart Contracts │  ← BountyContract.sol
+     │   Base Sepolia   │  ← Basescan API + RPC
+     │  ProwlBounty.sol │  ← Escrow smart contract
      └─────────────────┘
 ```
 
-## Partner Stacks
-
-- **Base**: Bounty smart contracts deployed on Base. All transactions (bounty posting, escrow, payouts) happen on Base. Agents read Base chain data for investigations.
-- **Virtuals Protocol**: Agents register on the Virtuals network via ACP (Agent Commerce Protocol). Other agents can discover and hire Prowl for investigations.
-
 ## Tech Stack
 
-- Next.js (App Router), React, TypeScript, TailwindCSS
-- OpenRouter API (DeepSeek model for agent reasoning)
-- Sibyl Memory SDK (Python client via Flask bridge + in-memory TypeScript store)
-- Solidity smart contracts on Base (bounty escrow)
-- Virtuals Protocol ACP SDK (agent commerce)
-- Base RPC + Basescan API (chain data)
-- SSE (Server-Sent Events) for real-time investigation updates
+- **Framework:** Next.js 16 (App Router), React 19, TypeScript
+- **Styling:** TailwindCSS v4, CSS custom properties, full dark mode
+- **AI Reasoning:** OpenRouter API (DeepSeek model)
+- **Memory:** Sibyl Memory SDK — dual-mode adapter (in-memory dev / Python bridge for production Sibyl)
+- **Chain:** Base Sepolia L2, Basescan API, viem
+- **Wallet:** RainbowKit + wagmi, SIWE authentication
+- **Contracts:** Solidity 0.8.20, Hardhat, bounty escrow on Base
+- **Real-time:** SSE (Server-Sent Events) for live investigation updates
+- **Auth:** iron-session encrypted cookies + SIWE
+
+## Partner Stacks
+
+- **Base** — Bounty smart contracts deployed on Base. All transactions (bounty posting, escrow, payouts) happen onchain. Agents read Base chain data for investigations.
+- **Virtuals Protocol** — Agents register on the Virtuals network via ACP (Agent Commerce Protocol). Other agents can discover and hire Prowl for investigations.
+
+---
 
 ## Project Structure
 
 ```
 prowl/
 ├── contracts/
-│   └── BountyContract.sol         # Bounty escrow on Base
+│   └── BountyContract.sol           # Bounty escrow on Base
 ├── sibyl-bridge/
-│   ├── server.py                  # Python REST bridge to sibyl-memory-client
+│   ├── server.py                    # Python REST bridge to sibyl-memory-client
 │   └── requirements.txt
 ├── src/
 │   ├── agents/
-│   │   ├── tracer.ts              # Fund tracing agent
-│   │   ├── analyst.ts             # Pattern matching agent
-│   │   ├── monitor.ts             # Dormant wallet watcher
-│   │   ├── coordinator.ts         # Orchestrates the 3 agents
-│   │   └── ai.ts                  # OpenRouter AI wrapper
+│   │   ├── coordinator.ts           # Orchestrates the 3 agents
+│   │   ├── tracer.ts                # Fund tracing agent
+│   │   ├── analyst.ts               # Pattern matching agent
+│   │   ├── monitor.ts               # Dormant wallet watcher
+│   │   └── ai.ts                    # OpenRouter AI wrapper
 │   ├── memory/
-│   │   ├── sibyl.ts               # Unified memory (in-memory + Sibyl bridge)
-│   │   └── schemas.ts             # Memory collection schemas
+│   │   ├── sibyl.ts                 # Unified memory adapter
+│   │   └── schemas.ts               # Memory collection schemas
 │   ├── virtuals/
-│   │   └── acp.ts                 # Virtuals Protocol ACP integration
+│   │   └── acp.ts                   # Virtuals Protocol ACP integration
 │   ├── chain/
-│   │   ├── reader.ts              # Read Base chain data
-│   │   ├── contracts.ts           # Smart contract ABI + config
-│   │   └── utils.ts               # Address utils, tx parsing
+│   │   ├── reader.ts                # Read Base chain data
+│   │   ├── contracts.ts             # Smart contract ABI + config
+│   │   └── utils.ts                 # Address utils, tx parsing
 │   ├── app/
-│   │   ├── page.tsx               # Dashboard
-│   │   ├── bounty/new/page.tsx    # Post bounty form
-│   │   ├── case/[id]/page.tsx     # Investigation view
-│   │   ├── patterns/page.tsx      # Pattern library
-│   │   ├── memory/page.tsx        # Memory debug + deletion test
-│   │   └── api/
-│   │       ├── investigate/       # Start investigation, list cases
-│   │       ├── seed/              # Seed demo data
-│   │       ├── patterns/          # Pattern library API
-│   │       ├── monitor/           # Monitor status + trigger
-│   │       ├── memory/            # Memory health + dump
-│   │       └── virtuals/          # ACP status + agents
+│   │   ├── dashboard/page.tsx       # Data-driven dashboard
+│   │   ├── cases/page.tsx           # Active investigations
+│   │   ├── patterns/page.tsx        # Pattern library
+│   │   ├── memory/page.tsx          # Sibyl Memory explorer
+│   │   ├── agents/page.tsx          # Agent swarm status
+│   │   ├── bounty/new/page.tsx      # Post bounty form
+│   │   └── api/                     # REST + SSE endpoints
 │   ├── components/
-│   │   ├── FundFlowGraph.tsx      # Canvas-based fund flow visualization
-│   │   ├── AgentActivity.tsx      # Live agent activity feed
-│   │   ├── BountyCard.tsx         # Bounty display card
-│   │   ├── PatternCard.tsx        # Pattern display card
-│   │   └── Nav.tsx                # Navigation
+│   │   ├── DashboardShell.tsx       # Shared layout shell
+│   │   └── AuthGuard.tsx            # SIWE auth gate
+│   ├── hooks/
+│   │   └── useSIWE.ts              # SIWE sign-in hook
 │   └── lib/
-│       └── utils.ts               # Shared utilities
+│       ├── session.ts               # iron-session config
+│       └── auth.ts                  # Auth helpers
 ├── scripts/
-│   ├── deploy.ts                  # Hardhat deploy script
-│   └── seed.ts                    # Seed script
+│   └── deploy.ts                    # Hardhat deploy script
 ├── hardhat.config.ts
 └── package.json
 ```
@@ -159,54 +166,52 @@ npm install
 cp .env.example .env.local
 
 # Fill in your API keys in .env.local:
-# - OPENROUTER_API_KEY: from openrouter.ai
-# - BASESCAN_API_KEY: from basescan.org
-# - VIRTUALS_API_KEY: from virtuals.io (optional)
-# - PRIVATE_KEY: deployer wallet private key (for contract deploy)
+# OPENROUTER_API_KEY    — from openrouter.ai
+# BASESCAN_API_KEY      — from basescan.org
+# SESSION_SECRET        — any 32+ char string
+# PRIVATE_KEY           — deployer wallet (for contract deploy only)
 
 # Run the development server
 npm run dev
 ```
 
-### Optional: Sibyl Bridge (persistent memory)
+### Deploy Bounty Contract (Base Sepolia)
+
+```bash
+npx hardhat compile
+npx hardhat run scripts/deploy.ts --network base-sepolia
+# Set the printed address as NEXT_PUBLIC_BOUNTY_CONTRACT in .env.local
+npx hardhat verify --network base-sepolia <contract-address>
+```
+
+### Optional: Sibyl Bridge (persistent memory across restarts)
 
 ```bash
 cd sibyl-bridge
 pip install -r requirements.txt
 python server.py
-# Then set SIBYL_BRIDGE_URL=http://localhost:4001 in .env.local
+# Set SIBYL_BRIDGE_URL=http://localhost:4001 in .env.local
 ```
 
-### Optional: Deploy Bounty Contract
+---
 
-```bash
-npm install --save-dev hardhat @nomicfoundation/hardhat-toolbox dotenv
-npx hardhat compile
-npx hardhat run scripts/deploy.ts --network base-sepolia
-```
+## Demo Walkthrough
 
-## Demo Features
+1. **Connect wallet** — RainbowKit modal, sign SIWE message
+2. **Dashboard** — real-time stats: funds traced, cases, agent activity chart
+3. **Post a bounty** — enter victim wallet + incident TX, describe the theft
+4. **Watch agents investigate** — SSE-powered live updates as Tracer → Analyst → Monitor pipeline runs
+5. **Browse patterns** — see what the swarm has learned across cases
+6. **Sibyl Memory** — explore the shared memory store, search by address or pattern
+7. **Memory deletion test** — clear memory at Sibyl Memory page, start a new investigation, watch coordination degrade — proves memory is load-bearing
 
-1. **Post a bounty** — enter victim wallet + incident TX, lock reward
-2. **Watch agents trace** — real-time fund flow visualization via SSE
-3. **Pattern learning** — each case teaches the system new patterns
-4. **Deletion test** — clear memory at `/memory`, watch coordination fail
-5. **Cross-session recall** — restart the app, memory persists (with Sibyl bridge)
-6. **ACP integration** — browse Virtuals network agents at `/api/virtuals`
-
-## Memory Deletion Test
-
-Navigate to `/memory` and click "Clear All Memory". Then:
-- Start a new investigation → Tracer can't read Analyst tips → worse routing
-- Pattern matching → 0 patterns → every case starts from scratch
-- Monitor → watchlist empty → dormant funds never detected
-- **Proves memory is load-bearing, not decorative**
+---
 
 ## Prior Work Declaration
 
-This project was built from scratch during the Sibyl Labs Hackathon build window (Sep 1-10, 2026).
-Inspired by: Nemesis (Devpost - wallet investigation concept), Tribunal (Devpost - onchain bounty/escrow pattern), Eclipse (Devpost - policy-controlled agent treasury).
-No code was reused from these projects.
+This project was built from scratch during the Sibyl Labs Hackathon build window (Sep 1–10, 2026).
+
+Inspired by: Nemesis (wallet investigation concept), Tribunal (onchain bounty/escrow pattern), Eclipse (policy-controlled agent treasury). No code was reused from these projects.
 
 ## License
 
@@ -214,4 +219,4 @@ MIT
 
 ---
 
-Built for the Sibyl Labs Hackathon — September 2026
+Built for the **Sibyl Labs Hackathon** — September 2026
