@@ -3,12 +3,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MonitorAgent } from '@/agents/monitor';
 import { getSharedCoordinator } from '@/agents/shared';
+import { requireAuth } from '@/lib/auth';
 
 const monitor = new MonitorAgent();
 
 // GET /api/monitor — Get monitoring status
 export async function GET() {
   try {
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
     const status = await monitor.getStatus();
     return NextResponse.json(status);
   } catch (error) {
@@ -22,6 +25,8 @@ export async function GET() {
 // POST /api/monitor — Trigger a watch check
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
     const body = await req.json().catch(() => ({}));
     const { caseId } = body;
 

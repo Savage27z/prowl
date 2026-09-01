@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server';
 import { getSibylMemory } from '@/memory/sibyl';
 import { COLLECTIONS } from '@/memory/schemas';
 import type { Pattern, Case } from '@/memory/schemas';
+import { requireAuth } from '@/lib/auth';
 
 const memory = getSibylMemory();
 
@@ -112,6 +113,8 @@ const SEED_CASES: Case[] = [
 
 export async function POST() {
   try {
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
     let patternsStored = 0;
     let casesStored = 0;
 

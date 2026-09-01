@@ -5,11 +5,15 @@ import {
   browseAgents,
   PROWL_OFFERINGS,
 } from '@/virtuals/acp';
+import { requireAuth } from '@/lib/auth';
 
 /**
  * GET /api/virtuals — ACP status + available agents
  */
 export async function GET() {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
   const available = isACPAvailable();
 
   if (!available) {

@@ -4,11 +4,14 @@ import { NextResponse } from 'next/server';
 import { getSibylMemory } from '@/memory/sibyl';
 import { COLLECTIONS } from '@/memory/schemas';
 import type { Pattern } from '@/memory/schemas';
+import { requireAuth } from '@/lib/auth';
 
 const memory = getSibylMemory();
 
 export async function GET() {
   try {
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
     const patterns = await memory.query<Pattern>(COLLECTIONS.PATTERNS, {
       sort: { field: 'times_matched', order: 'desc' },
     });

@@ -5,12 +5,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSibylMemory } from '@/memory/sibyl';
 import { COLLECTIONS } from '@/memory/schemas';
+import { requireAuth } from '@/lib/auth';
 
 const memory = getSibylMemory();
 
 // GET /api/memory — Health check, stats, and full dump
 export async function GET() {
   try {
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
     const health = await memory.healthCheck();
     const collections = memory.dump();
 
@@ -26,6 +29,9 @@ export async function GET() {
 // DELETE /api/memory — Clear all memory (deletion test)
 // Protected: requires ?confirm=yes to prevent accidental wipes
 export async function DELETE(req: NextRequest) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
   const confirm = req.nextUrl.searchParams.get('confirm');
   if (confirm !== 'yes') {
     return NextResponse.json(

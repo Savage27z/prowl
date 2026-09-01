@@ -2,12 +2,16 @@
 // GET /api/investigate/stream — SSE endpoint for real-time investigation updates
 // Frontend connects here to watch agents work in real time
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getSharedCoordinator, addStreamListener } from '@/agents/shared';
+import { requireAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
+
   const encoder = new TextEncoder();
 
   // Ensure the shared coordinator is initialized

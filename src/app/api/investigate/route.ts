@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSharedCoordinator } from '@/agents/shared';
 import { isValidAddress, isValidTxHash } from '@/chain/utils';
+import { requireAuth } from '@/lib/auth';
 
 // Simple in-memory rate limiter: max 5 investigations per minute
 const recentRequests: number[] = [];
@@ -24,6 +25,9 @@ function checkRateLimit(): boolean {
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
+
     if (!checkRateLimit()) {
       return NextResponse.json(
         { error: 'Rate limited — max 5 investigations per minute' },
