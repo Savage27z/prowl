@@ -1,3 +1,4 @@
+// ScrambleText — character-by-character text scramble animation
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
