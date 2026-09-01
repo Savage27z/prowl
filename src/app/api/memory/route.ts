@@ -1,3 +1,4 @@
+// Memory API — query and browse Sibyl memory entries
 // Memory API — debug endpoints for Sibyl Memory
 // Used by the Memory debug page and deletion test demo
 
