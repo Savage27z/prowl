@@ -4,6 +4,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ReactNode } from 'react';
+import { useSIWE } from '@/hooks/useSIWE';
 
 function SearchIcon() {
   return (
@@ -23,8 +24,14 @@ const NAV_ITEMS: { label: string; href: string; badge?: string }[] = [
   { label: 'Payouts', href: '/payouts' },
 ];
 
+function truncateAddress(addr: string) {
+  if (!addr || addr.length < 10) return addr;
+  return addr.slice(0, 6) + '…' + addr.slice(-4);
+}
+
 export default function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const { session, signOut } = useSIWE();
 
   return (
     <div style={{
@@ -62,9 +69,13 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
               display: 'grid', placeContent: 'center',
               fontFamily: 'var(--font-heading)', fontSize: 24,
               color: 'var(--color-accent-700)', background: 'var(--color-accent-100)',
-            }}>RG</span>
-            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 17, marginTop: 'var(--space-3)' }}>Robert Grant</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '9.5px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--color-accent-700)', marginTop: 3 }}>Lead investigator</div>
+            }}>
+              {session ? session.address.slice(2, 4).toUpperCase() : '??'}
+            </span>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, marginTop: 'var(--space-3)', letterSpacing: '0.04em' }}>
+              {session ? truncateAddress(session.address) : 'Not connected'}
+            </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '9.5px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--color-accent-700)', marginTop: 3 }}>Investigator</div>
           </div>
 
           {/* Nav */}
@@ -94,19 +105,25 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
             })}
           </nav>
 
-          {/* Logout */}
-          <div style={{
-            marginTop: 'auto', paddingTop: 'var(--space-6)',
-            borderTop: '1px solid var(--color-divider)',
-            display: 'flex', alignItems: 'center', gap: 9,
-            fontSize: '12.5px', color: 'var(--color-neutral-700)',
-            cursor: 'pointer',
-          }}>
+          {/* Sign out */}
+          <button
+            onClick={signOut}
+            type="button"
+            style={{
+              marginTop: 'auto', paddingTop: 'var(--space-6)',
+              borderTop: '1px solid var(--color-divider)',
+              display: 'flex', alignItems: 'center', gap: 9,
+              fontSize: '12.5px', color: 'var(--color-neutral-700)',
+              cursor: 'pointer', background: 'none', border: 'none',
+              font: 'inherit', width: '100%', padding: '0',
+              paddingBlockStart: 'var(--space-6)',
+            }}
+          >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
               <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l-5-5 5-5M5 12h11" />
             </svg>
-            Log out
-          </div>
+            Sign out
+          </button>
         </aside>
 
         {/* ═══ MAIN ═══ */}

@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import ProwlLogo from './ProwlLogo';
 import SquashHamburger from './SquashHamburger';
 import ScrambleText from './ScrambleText';
@@ -87,23 +88,50 @@ export default function LandingNav({ visible }: LandingNavProps) {
           </motion.div>
         </div>
 
-        {/* CTA */}
-        <Link href="/bounty/new">
-          <motion.div
-            className="h-12 px-6 bg-white rounded-full flex items-center gap-2 text-black cursor-pointer"
-            whileHover={{ scale: 1.03, backgroundColor: '#e2e2e6' }}
-            whileTap={{ scale: 0.97 }}
-            onMouseEnter={() => setHoveredBtn(true)}
-            onMouseLeave={() => setHoveredBtn(false)}
-          >
-            <span className="text-[15px]">🔍</span>
-            <ScrambleText
-              text="Post Bounty"
-              isHovered={hoveredBtn}
-              className="text-[15px] font-medium"
-            />
-          </motion.div>
-        </Link>
+        {/* CTA + Wallet */}
+        <div className="flex items-center gap-3">
+          <ConnectButton.Custom>
+            {({ account, chain, openConnectModal, mounted }) => {
+              if (!mounted || !account) {
+                return (
+                  <motion.button
+                    className="h-12 px-5 bg-white/15 backdrop-blur-md rounded-[14px] text-[14px] text-white/90 cursor-pointer border-0"
+                    whileHover={{ scale: 1.03, backgroundColor: 'rgba(255,255,255,0.22)' }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={openConnectModal}
+                  >
+                    Connect
+                  </motion.button>
+                );
+              }
+              return (
+                <motion.div
+                  className="h-12 px-5 bg-white/15 backdrop-blur-md rounded-[14px] flex items-center gap-2 text-[14px] text-white/90"
+                  whileHover={{ scale: 1.02 }}
+                >
+                  <span className="w-2 h-2 rounded-full bg-green-400" />
+                  {account.displayName}
+                </motion.div>
+              );
+            }}
+          </ConnectButton.Custom>
+          <Link href="/bounty/new">
+            <motion.div
+              className="h-12 px-6 bg-white rounded-full flex items-center gap-2 text-black cursor-pointer"
+              whileHover={{ scale: 1.03, backgroundColor: '#e2e2e6' }}
+              whileTap={{ scale: 0.97 }}
+              onMouseEnter={() => setHoveredBtn(true)}
+              onMouseLeave={() => setHoveredBtn(false)}
+            >
+              <span className="text-[15px]">🔍</span>
+              <ScrambleText
+                text="Post Bounty"
+                isHovered={hoveredBtn}
+                className="text-[15px] font-medium"
+              />
+            </motion.div>
+          </Link>
+        </div>
       </div>
 
       {/* ─── Mobile ─── */}
@@ -162,12 +190,34 @@ export default function LandingNav({ visible }: LandingNavProps) {
           </motion.div>
         </div>
 
-        <Link href="/bounty/new">
-          <div className="h-9 px-3.5 bg-white rounded-full flex items-center gap-1.5 text-black">
-            <span className="text-[12px]">🔍</span>
-            <span className="text-[13px] font-medium">Bounty</span>
-          </div>
-        </Link>
+        <div className="flex items-center gap-2">
+          <ConnectButton.Custom>
+            {({ account, openConnectModal, mounted }) => {
+              if (!mounted || !account) {
+                return (
+                  <button
+                    className="h-9 px-3 bg-white/15 backdrop-blur-md rounded-[10px] text-[12px] text-white/90 border-0 cursor-pointer"
+                    onClick={openConnectModal}
+                  >
+                    Connect
+                  </button>
+                );
+              }
+              return (
+                <div className="h-9 px-3 bg-white/15 backdrop-blur-md rounded-[10px] flex items-center gap-1.5 text-[12px] text-white/90">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                  {account.displayName}
+                </div>
+              );
+            }}
+          </ConnectButton.Custom>
+          <Link href="/bounty/new">
+            <div className="h-9 px-3.5 bg-white rounded-full flex items-center gap-1.5 text-black">
+              <span className="text-[12px]">🔍</span>
+              <span className="text-[13px] font-medium">Bounty</span>
+            </div>
+          </Link>
+        </div>
       </div>
     </motion.nav>
   );
