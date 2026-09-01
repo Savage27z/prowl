@@ -149,19 +149,19 @@ export class Coordinator {
       });
 
       // Update case status
-      await this.memory.update<Case>(COLLECTIONS.CASES, caseId, {
+      await this.memory.update(COLLECTIONS.CASES, caseId, {
         status: 'monitoring',
         agents_involved: ['tracer', 'analyst', 'monitor'],
-      } as Partial<Case> & Record<string, unknown>);
+      });
     }
 
     // If exchange/bridge found, case is effectively solved
     if (traceResult.status === 'exchange_found' || traceResult.status === 'bridge_found') {
-      await this.memory.update<Case>(COLLECTIONS.CASES, caseId, {
+      await this.memory.update(COLLECTIONS.CASES, caseId, {
         status: 'solved',
         solved_at: new Date().toISOString(),
         agents_involved: ['tracer', 'analyst'],
-      } as Partial<Case> & Record<string, unknown>);
+      });
 
       this.emit({
         caseId,
