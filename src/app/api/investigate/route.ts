@@ -3,6 +3,7 @@
 // GET  /api/investigate — List cases + stats
 
 import { NextRequest, NextResponse } from 'next/server';
+import { after } from 'next/server';
 import { getSharedCoordinator } from '@/agents/shared';
 import { isValidAddress, isValidTxHash } from '@/chain/utils';
 import { requireAuth } from '@/lib/auth';
@@ -79,6 +80,16 @@ export async function POST(req: NextRequest) {
     );
 
     const caseData = await coordinator.getCase(caseId);
+
+    // Run the investigation pipeline in the background after the response is sent
+    // This lets the client connect to SSE first and watch events stream in
+    after(async () => {
+      try {
+        await coordinator.runInvestigation(caseId);
+      } catch {
+        // Pipeline error — case stays in 'active' status
+      }
+    });
 
     return NextResponse.json({ success: true, caseId, case: caseData });
   } catch (error) {
