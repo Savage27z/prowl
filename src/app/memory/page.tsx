@@ -8,6 +8,52 @@ interface MemoryEntry {
   id: string;
   description: string;
   case_id: string;
+  kind: 'hop' | 'analysis' | 'case' | 'pattern' | 'unknown';
+}
+
+function describeRecord(rec: Record<string, unknown>): { id: string; description: string; kind: MemoryEntry['kind'] } {
+  // Hop record
+  if (rec.hop_number !== undefined && rec.from_address) {
+    const amt = rec.amount ? ` (${rec.amount} ETH)` : '';
+    const flag = rec.flag_reason ? ` — ${rec.flag_reason}` : '';
+    return {
+      id: (rec.from_address as string) || '—',
+      description: `Hop ${rec.hop_number}: → ${((rec.to_address as string) || '').slice(0, 10)}…${amt}${flag}`,
+      kind: 'hop',
+    };
+  }
+  // Analysis record
+  if (rec.address_analyzed || rec.risk_level) {
+    return {
+      id: (rec.address_analyzed as string) || '—',
+      description: (rec.notes as string) || `${rec.risk_level || 'unknown'} risk`,
+      kind: 'analysis',
+    };
+  }
+  // Case record
+  if (rec.case_id && rec.victim_wallet) {
+    const status = rec.status ? ` [${rec.status}]` : '';
+    const funds = rec.total_funds_traced ? ` — ${rec.total_funds_traced}` : '';
+    return {
+      id: (rec.victim_wallet as string) || '—',
+      description: `Case${status}${funds}`,
+      kind: 'case',
+    };
+  }
+  // Pattern record
+  if (rec.pattern_id || rec.pattern_type) {
+    return {
+      id: (rec.pattern_id as string) || '—',
+      description: (rec.description as string) || `Pattern: ${rec.pattern_type || 'unknown'}`,
+      kind: 'pattern',
+    };
+  }
+  // Fallback — never show raw JSON
+  return {
+    id: (rec.address_analyzed || rec.from_address || rec.case_id || '—') as string,
+    description: (rec.notes || rec.flag_reason || rec.description || 'Memory entry') as string,
+    kind: 'unknown',
+  };
 }
 
 export default function Memory() {
@@ -28,11 +74,8 @@ export default function Memory() {
           if (Array.isArray(items)) {
             for (const item of items) {
               const rec = item as Record<string, unknown>;
-              all.push({
-                id: (rec.address_analyzed || rec.from_address || rec.pattern_id || rec.case_id || '—') as string,
-                description: (rec.notes || rec.flag_reason || rec.description || JSON.stringify(rec).slice(0, 80)) as string,
-                case_id: (rec.case_id || '—') as string,
-              });
+              const { id, description, kind } = describeRecord(rec);
+              all.push({ id, description, case_id: (rec.case_id || '—') as string, kind });
             }
           }
         }
@@ -59,13 +102,15 @@ export default function Memory() {
               const hopsRaw = localStorage.getItem(`prowl-hops-${c.case_id}`);
               if (hopsRaw) {
                 for (const h of JSON.parse(hopsRaw)) {
-                  all.push({ id: h.from_address || '—', description: h.flag_reason || `Hop ${h.hop_number}: ${h.amount} ETH`, case_id: c.case_id });
+                  const { id, description, kind } = describeRecord(h);
+                  all.push({ id, description, case_id: c.case_id, kind });
                 }
               }
               const analysisRaw = localStorage.getItem(`prowl-analysis-${c.case_id}`);
               if (analysisRaw) {
                 for (const a of JSON.parse(analysisRaw)) {
-                  all.push({ id: a.address_analyzed || '—', description: a.notes || `${a.risk_level} risk`, case_id: c.case_id });
+                  const { id, description, kind } = describeRecord(a);
+                  all.push({ id, description, case_id: c.case_id, kind });
                 }
               }
             }
@@ -76,6 +121,29 @@ export default function Memory() {
 
     setEntries(all);
     setLoading(false);
+  }, []);
+
+  const clearMemory = useCallback(async () => {
+    // Clear localStorage caches
+    try {
+      const casesRaw = localStorage.getItem('prowl-cases');
+      if (casesRaw) {
+        const cases = JSON.parse(casesRaw) as { case_id: string }[];
+        for (const c of cases) {
+          localStorage.removeItem(`prowl-hops-${c.case_id}`);
+          localStorage.removeItem(`prowl-analysis-${c.case_id}`);
+          localStorage.removeItem(`prowl-feed-${c.case_id}`);
+        }
+      }
+      localStorage.removeItem('prowl-cases');
+      localStorage.removeItem('prowl-memory');
+      localStorage.removeItem('prowl-stats');
+    } catch { /* */ }
+
+    // Clear server memory too
+    try { await fetch('/api/memory?confirm=yes', { method: 'DELETE' }); } catch { /* */ }
+
+    setEntries([]);
   }, []);
 
   useEffect(() => { fetchMemory(); }, [fetchMemory]);
@@ -106,6 +174,7 @@ export default function Memory() {
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9.5px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--color-neutral-600)' }}>
             Search memory
           </span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input
             type="text"
             value={search}
@@ -118,6 +187,19 @@ export default function Memory() {
               color: 'var(--color-text)', outline: 'none',
             }}
           />
+          {entries.length > 0 && (
+            <button
+              onClick={clearMemory}
+              style={{
+                padding: '8px 12px', borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--color-divider)', background: 'transparent',
+                fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em',
+                textTransform: 'uppercase', color: 'var(--color-neutral-600)',
+                cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >Clear</button>
+          )}
+          </div>
         </div>
       </div>
 
@@ -144,11 +226,19 @@ export default function Memory() {
         ) : (
           filtered.map((entry, i) => (
             <div key={i} className="pw-memory-row" style={{
-              display: 'grid', gridTemplateColumns: '140px 1fr 100px',
+              display: 'grid', gridTemplateColumns: '52px 140px 1fr 100px',
               alignItems: 'center', gap: 'var(--space-3)',
               padding: 'var(--space-3) 0',
               borderBottom: '1px solid var(--color-divider)',
             }}>
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.08em',
+                textTransform: 'uppercase', color: 'var(--color-accent-700)',
+                background: 'var(--color-accent-100)', borderRadius: 'var(--radius-md)',
+                padding: '2px 6px', textAlign: 'center', whiteSpace: 'nowrap',
+              }}>
+                {entry.kind === 'hop' ? 'HOP' : entry.kind === 'analysis' ? 'ANLYS' : entry.kind === 'case' ? 'CASE' : entry.kind === 'pattern' ? 'PTRN' : 'DATA'}
+              </span>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--color-accent-700)' }}>
                 {entry.id.length > 16 ? entry.id.slice(0, 6) + '…' + entry.id.slice(-4) : entry.id}
               </span>
