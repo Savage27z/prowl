@@ -2,12 +2,16 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, use } from 'react';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useSwitchChain } from 'wagmi';
+import { baseSepolia } from 'wagmi/chains';
 import DashboardShell from '@/components/DashboardShell';
+import { getBountyContractConfig } from '@/chain/contracts';
 
 /* ── Types ── */
 
 interface CaseData {
   case_id: string;
+  bounty_id?: string;
   victim_wallet: string;
   incident_tx: string;
   status: string;
@@ -16,6 +20,10 @@ interface CaseData {
   total_hops_traced: number;
   total_funds_traced: string;
   agents_involved: string[];
+  claim_tx?: string;
+  report_tx?: string;
+  claimed_by?: string;
+  payout_tx?: string;
 }
 
 interface HopData {
@@ -95,6 +103,8 @@ function actionLabel(action: string): string {
     trace_resumed: 'Resumed tracing',
     reanalysis_complete: 'Reanalysis complete',
     connected: 'Stream connected',
+    bounty_claimed: 'Bounty claimed on-chain',
+    report_submitted: 'Report submitted on-chain',
   };
   return labels[action] || action.replace(/_/g, ' ');
 }
@@ -171,6 +181,50 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
   const [activeTab, setActiveTab] = useState<'feed' | 'hops' | 'analysis'>('feed');
   const [pipelineDone, setPipelineDone] = useState(false);
   const feedRef = useRef<HTMLDivElement>(null);
+  const [payoutPending, setPayoutPending] = useState(false);
+  const [payoutTxHash, setPayoutTxHash] = useState<string | null>(null);
+  const [payoutError, setPayoutError] = useState('');
+  const { isConnected, chainId } = useAccount();
+  const { switchChainAsync } = useSwitchChain();
+  const { writeContractAsync } = useWriteContract();
+
+  useWaitForTransactionReceipt({
+    hash: payoutTxHash as `0x${string}` | undefined,
+  });
+
+  // Release reward — poster calls approvePayout on-chain
+  const handleReleasePayout = async () => {
+    if (!caseData?.bounty_id || caseData.bounty_id.startsWith('manual-')) return;
+    const bountyId = parseInt(caseData.bounty_id, 10);
+    if (isNaN(bountyId)) return;
+
+    setPayoutPending(true);
+    setPayoutError('');
+    try {
+      if (chainId !== baseSepolia.id) {
+        await switchChainAsync({ chainId: baseSepolia.id });
+      }
+      const contract = getBountyContractConfig();
+      const hash = await writeContractAsync({
+        ...contract,
+        chainId: baseSepolia.id,
+        functionName: 'approvePayout',
+        args: [BigInt(bountyId)],
+      });
+      setPayoutTxHash(hash);
+      // Update local case data
+      setCaseData(prev => prev ? { ...prev, payout_tx: hash, status: 'solved' } : prev);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Payout failed';
+      if (msg.includes('User rejected') || msg.includes('denied')) {
+        setPayoutError('Transaction cancelled');
+      } else {
+        setPayoutError(msg.slice(0, 120));
+      }
+    } finally {
+      setPayoutPending(false);
+    }
+  };
 
   // Load data — try server first, fall back to localStorage
   const fetchData = useCallback(async () => {
@@ -348,6 +402,71 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
           </div>
         ))}
       </div>
+
+      {/* Payout section — shown when report is submitted on-chain */}
+      {caseData.report_tx && !caseData.payout_tx && (
+        <div style={{
+          borderRadius: 'var(--radius-md)', border: '1px solid var(--color-accent-300)',
+          background: 'var(--color-accent-100)', padding: 'var(--space-4)',
+          marginBottom: 'var(--space-4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)',
+          flexWrap: 'wrap',
+        }}>
+          <div>
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 17, marginBottom: 4 }}>
+              Investigation complete — report submitted on-chain
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--color-neutral-700)' }}>
+              Reward: <strong style={{ fontFamily: 'var(--font-heading)' }}>{caseData.reward}</strong>
+              {caseData.claimed_by && (
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, marginLeft: 8 }}>
+                  → {truncate(caseData.claimed_by, 6)}
+                </span>
+              )}
+            </div>
+            {payoutError && (
+              <div style={{ fontSize: 11, color: 'var(--color-error)', marginTop: 4 }}>{payoutError}</div>
+            )}
+          </div>
+          {isConnected ? (
+            <button onClick={handleReleasePayout} disabled={payoutPending} style={{
+              padding: '10px 20px', borderRadius: 'var(--radius-md)',
+              background: 'var(--color-text)', color: 'var(--color-bg)',
+              fontFamily: 'var(--font-mono)', fontSize: '10px',
+              letterSpacing: '0.12em', textTransform: 'uppercase',
+              border: 'none', cursor: payoutPending ? 'wait' : 'pointer',
+              opacity: payoutPending ? 0.6 : 1, whiteSpace: 'nowrap',
+            }}>
+              {payoutPending ? 'Confirm in wallet…' : 'Release reward'}
+            </button>
+          ) : (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--color-neutral-600)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              Connect wallet to release
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Payout confirmed */}
+      {(caseData.payout_tx || payoutTxHash) && (
+        <div style={{
+          borderRadius: 'var(--radius-md)', border: '1px solid var(--color-status-solved-border)',
+          background: 'var(--color-status-solved-bg)', padding: 'var(--space-4)',
+          marginBottom: 'var(--space-4)',
+          fontSize: 13,
+        }}>
+          <span style={{ color: 'var(--color-status-solved)', fontWeight: 600 }}>✓ Reward released</span>
+          {(caseData.payout_tx || payoutTxHash) && (
+            <a
+              href={`https://sepolia.basescan.org/tx/${caseData.payout_tx || payoutTxHash}`}
+              target="_blank" rel="noopener noreferrer"
+              style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--color-accent-700)', marginLeft: 12, textDecoration: 'underline' }}
+            >
+              {truncate(caseData.payout_tx || payoutTxHash || '', 8)}
+            </a>
+          )}
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--color-divider)', marginBottom: 'var(--space-4)' }}>

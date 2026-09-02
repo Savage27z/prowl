@@ -8,6 +8,7 @@ import type { Case } from '@/memory/schemas';
 import { TracerAgent } from './tracer';
 import { AnalystAgent } from './analyst';
 import { MonitorAgent } from './monitor';
+import { claimBountyOnChain, submitReportOnChain, getProtocolWallet } from '@/chain/bounty-writer';
 
 export interface InvestigationUpdate {
   caseId: string;
@@ -185,6 +186,57 @@ export class Coordinator {
         action: 'case_solved',
         data: { destination: traceResult.status },
       });
+    }
+
+    // Auto-claim bounty + submit report on-chain (non-blocking — best effort)
+    const caseAfter = await this.getCase(caseId);
+    const bountyIdStr = caseAfter?.bounty_id;
+    // Only attempt on-chain actions for real bounties (not manual-*)
+    if (bountyIdStr && !bountyIdStr.startsWith('manual-')) {
+      const bountyIdNum = parseInt(bountyIdStr, 10);
+      if (!isNaN(bountyIdNum)) {
+        this.claimAndSubmit(caseId, bountyIdNum, traceResult.summary).catch((err) => {
+          console.error('[Coordinator] On-chain claim/submit failed:', err);
+        });
+      }
+    }
+  }
+
+  // Auto-claim + submit report on-chain after investigation completes
+  private async claimAndSubmit(caseId: string, bountyId: number, summary: string): Promise<void> {
+    const protocolWallet = getProtocolWallet();
+    if (!protocolWallet) {
+      console.log('[Coordinator] No PRIVATE_KEY — skipping on-chain claim');
+      return;
+    }
+
+    // Step 1: Claim the bounty
+    const claimTx = await claimBountyOnChain(bountyId);
+    if (claimTx) {
+      this.emit({
+        caseId,
+        agent: 'coordinator',
+        action: 'bounty_claimed',
+        data: { bountyId, claimTx, protocolWallet },
+      });
+
+      // Step 2: Submit the report
+      const submitTx = await submitReportOnChain(bountyId, summary);
+      if (submitTx) {
+        this.emit({
+          caseId,
+          agent: 'coordinator',
+          action: 'report_submitted',
+          data: { bountyId, submitTx, reportSummary: summary.slice(0, 200) },
+        });
+
+        // Update case with on-chain data
+        await this.memory.update(COLLECTIONS.CASES, caseId, {
+          claim_tx: claimTx,
+          report_tx: submitTx,
+          claimed_by: protocolWallet,
+        });
+      }
     }
   }
 
