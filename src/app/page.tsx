@@ -178,9 +178,9 @@ export default function Home() {
   if (!ready) {
     return (
       <div style={{
-        position: 'fixed', inset: 0, background: '#14120f',
+        position: 'fixed', inset: 0, background: 'var(--color-bg)',
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        color: '#f3f2f2', zIndex: 9999,
+        color: 'var(--color-text)', zIndex: 9999,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <SearchIcon stroke="var(--color-accent)" />
@@ -189,7 +189,7 @@ export default function Home() {
           </span>
         </div>
         <div style={{
-          width: 120, height: 1, background: 'rgba(243,242,242,0.2)',
+          width: 120, height: 1, background: 'var(--color-divider)',
           margin: '24px 0 16px', position: 'relative', overflow: 'hidden',
         }}>
           <div style={{
@@ -202,7 +202,7 @@ export default function Home() {
         <span style={{
           fontFamily: 'var(--font-mono)', fontSize: 10.5,
           letterSpacing: '0.16em', textTransform: 'uppercase',
-          color: 'rgba(243,242,242,0.55)',
+          color: 'var(--color-neutral-600)',
         }}>
           Waking Coordinator
         </span>
@@ -470,14 +470,14 @@ export default function Home() {
 
       {/* ════════ STATS ════════ */}
       <section style={{
-        background: '#14120f', color: '#f3f2f2', borderRadius: 'var(--radius-lg)',
+        background: 'var(--color-surface)', color: 'var(--color-text)', borderRadius: 'var(--radius-lg)',
         marginTop: 12, padding: 'clamp(56px,6vw,92px) clamp(20px,3vw,44px)',
       }}>
         <Reveal variant="fade-up">
-          <Eyebrow light>How it works</Eyebrow>
+          <Eyebrow>How it works</Eyebrow>
           <h2 style={{
             fontSize: 'clamp(38px,4.4vw,62px)', fontWeight: 400, lineHeight: 0.98,
-            letterSpacing: '-0.025em', margin: 'var(--space-3) 0 0', color: '#f3f2f2',
+            letterSpacing: '-0.025em', margin: 'var(--space-3) 0 0',
             fontFamily: 'var(--font-heading)',
           }}>
             <ScrollClipReveal>A swarm that</ScrollClipReveal>
@@ -495,7 +495,7 @@ export default function Home() {
             { value: '24/7', label: 'Monitor uptime' },
           ].map((s) => (
             <div key={s.label} style={{
-              borderTop: '1px solid rgba(243,242,242,0.2)', paddingTop: 20,
+              borderTop: '1px solid var(--color-divider)', paddingTop: 20,
             }}>
               <dt style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)' }}>{s.label}</dt>
               <dd style={{ margin: 0 }}>
@@ -505,7 +505,7 @@ export default function Home() {
                 }}>
                   <CountUp value={s.value} />
                 </div>
-                <div style={{ fontSize: 13, color: 'rgba(243,242,242,0.65)', marginTop: 12 }}>{s.label}</div>
+                <div style={{ fontSize: 13, color: 'var(--color-neutral-600)', marginTop: 12 }}>{s.label}</div>
               </dd>
             </div>
           ))}
@@ -514,7 +514,7 @@ export default function Home() {
 
       {/* ════════ FOOTER ════════ */}
       <footer id="contact" style={{
-        background: '#14120f', color: 'rgba(243,242,242,0.75)',
+        background: 'var(--color-surface)', color: 'var(--color-neutral-700)',
         borderRadius: 'var(--radius-lg)', marginTop: 12,
         padding: 'clamp(48px,5vw,76px) clamp(20px,3vw,44px)',
       }}>
@@ -522,23 +522,23 @@ export default function Home() {
         <Reveal variant="fade-up" style={{
           display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end',
           justifyContent: 'space-between', gap: 26,
-          borderBottom: '1px solid rgba(243,242,242,0.16)',
+          borderBottom: '1px solid var(--color-divider)',
           paddingBottom: 'clamp(38px,4vw,58px)',
         }}>
           <div>
-            <Eyebrow light>Get started</Eyebrow>
+            <Eyebrow>Get started</Eyebrow>
             <p style={{
               fontFamily: 'var(--font-heading)', fontSize: 'clamp(44px,5.4vw,74px)',
               lineHeight: 0.92, letterSpacing: '-0.03em', margin: 'var(--space-3) 0 0',
-              color: '#f3f2f2',
+              color: 'var(--color-text)',
             }}>
               <ScrollClipReveal>Got a stolen</ScrollClipReveal>
-              <ScrollClipReveal delay={0.12}><span style={{ fontStyle: 'italic', color: 'var(--color-accent-300)' }}>wallet?</span></ScrollClipReveal>
+              <ScrollClipReveal delay={0.12}><span style={{ fontStyle: 'italic', color: 'var(--color-accent)' }}>wallet?</span></ScrollClipReveal>
             </p>
           </div>
           <Link href="/bounty/new" style={{
             display: 'inline-flex', alignItems: 'center', borderRadius: 999,
-            background: '#f3f2f2', color: '#14120f', padding: '14px 28px',
+            background: 'var(--color-text)', color: 'var(--color-bg)', padding: '14px 28px',
             fontSize: 13, letterSpacing: '0.14em', textTransform: 'uppercase',
             fontFamily: 'var(--font-mono)', textDecoration: 'none',
             transition: 'transform 0.3s, background 0.3s',
@@ -555,22 +555,22 @@ export default function Home() {
           <div style={{ maxWidth: 320 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <SearchIcon />
-              <span style={{ fontFamily: 'var(--font-heading)', fontSize: 18, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#f3f2f2' }}>Prowl</span>
+              <span style={{ fontFamily: 'var(--font-heading)', fontSize: 18, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--color-text)' }}>Prowl</span>
             </div>
-            <p style={{ fontSize: 13, color: 'rgba(243,242,242,0.65)', marginTop: 'var(--space-3)' }}>
+            <p style={{ fontSize: 13, color: 'var(--color-neutral-600)', marginTop: 'var(--space-3)' }}>
               An autonomous investigation swarm for crypto theft on Base, with Sibyl Memory as its case archive.
             </p>
             <div style={{ marginTop: 'var(--space-4)', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11.5px', color: 'rgba(243,242,242,0.5)' }}>Base Sepolia · testnet</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11.5px', color: 'var(--color-neutral-600)' }}>Base Sepolia · testnet</span>
             </div>
           </div>
 
           {FOOTER_NAV.map((col) => (
             <nav key={col.heading}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(243,242,242,0.5)' }}>{col.heading}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--color-neutral-600)' }}>{col.heading}</div>
               <ul style={{ listStyle: 'none', margin: 'var(--space-3) 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
                 {col.links.map((l) => (
-                  <li key={l.label}><Link href={l.href} style={{ color: 'rgba(243,242,242,0.8)', textDecoration: 'none' }}>{l.label}</Link></li>
+                  <li key={l.label}><Link href={l.href} style={{ color: 'var(--color-text)', textDecoration: 'none' }}>{l.label}</Link></li>
                 ))}
               </ul>
             </nav>
@@ -579,10 +579,10 @@ export default function Home() {
 
         {/* Bottom bar */}
         <Reveal variant="fade" delay={0.2} style={{
-          borderTop: '1px solid rgba(243,242,242,0.16)', paddingTop: 'var(--space-6)',
+          borderTop: '1px solid var(--color-divider)', paddingTop: 'var(--space-6)',
           display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 'var(--space-3)',
           fontFamily: 'var(--font-mono)', fontSize: '10.5px', letterSpacing: '0.1em',
-          textTransform: 'uppercase', color: 'rgba(243,242,242,0.45)',
+          textTransform: 'uppercase', color: 'var(--color-neutral-600)',
         }}>
           <span>© 2026 Prowl · Sibyl Labs Hackathon</span>
         </Reveal>

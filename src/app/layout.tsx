@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 import { Space_Mono, Cormorant_Garamond, Lora } from "next/font/google";
 import Web3Provider from "@/providers/Web3Provider";
+import ThemeInit from "@/components/ThemeInit";
 import "./globals.css";
 
 const spaceMono = Space_Mono({
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${spaceMono.variable} ${cormorant.variable} ${lora.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
+        <ThemeInit />
         <Web3Provider>
           {children}
         </Web3Provider>
