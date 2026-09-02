@@ -78,33 +78,84 @@ export default function Dashboard() {
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch('/api/investigate');
+      let serverCases: { case_id: string; status: string }[] = [];
+      let serverStats: Stats | null = null;
+
       if (res.ok) {
         const data = await res.json();
-        if (data.stats) {
-          setStats(data.stats);
-          try { localStorage.setItem('prowl-stats', JSON.stringify(data.stats)); } catch { /* */ }
-        }
-        if (data.cases) {
-          try { localStorage.setItem('prowl-cases', JSON.stringify(data.cases)); } catch { /* */ }
-          // Fetch events for the most recent active case to populate the activity feed
-          const activeCases = (data.cases as { case_id: string; status: string }[])
-            .filter(c => c.status === 'active' || c.status === 'monitoring');
-          if (activeCases.length > 0) {
-            try {
-              const caseRes = await fetch(`/api/investigate?caseId=${activeCases[0].case_id}`);
-              if (caseRes.ok) {
-                const caseData = await caseRes.json();
-                if (caseData.events?.length > 0) {
-                  setActivities(caseData.events.map((e: Activity) => ({
-                    agent: e.agent, action: e.action, data: e.data || {}, timestamp: e.timestamp,
-                  })).reverse());
-                }
-              }
-            } catch { /* */ }
-          }
-        }
+        serverCases = data.cases || [];
+        serverStats = data.stats || null;
+      }
+
+      // Merge with localStorage — serverless Lambdas lose in-memory data on cold starts
+      let cachedCases: { case_id: string; status: string }[] = [];
+      try {
+        const raw = localStorage.getItem('prowl-cases');
+        if (raw) cachedCases = JSON.parse(raw);
+      } catch { /* */ }
+
+      // Use whichever source has more cases (server may have empty memory)
+      const cases = serverCases.length >= cachedCases.length ? serverCases : cachedCases;
+      const stats = serverStats && serverStats.totalCases > 0 ? serverStats : null;
+
+      // Cache the better source
+      if (cases.length > 0) {
+        try { localStorage.setItem('prowl-cases', JSON.stringify(cases)); } catch { /* */ }
+      }
+
+      // Build stats from cases if server stats are empty
+      if (stats) {
+        setStats(stats);
+        try { localStorage.setItem('prowl-stats', JSON.stringify(stats)); } catch { /* */ }
+      } else if (cases.length > 0) {
+        // Compute basic stats from cached cases
+        const computed: Stats = {
+          totalCases: cases.length,
+          activeCases: cases.filter(c => c.status === 'active' || c.status === 'monitoring').length,
+          solvedCases: cases.filter(c => c.status === 'solved').length,
+          totalPatterns: 0,
+          watchedAddresses: 0,
+          totalHops: 0,
+          totalFundsEth: 0,
+          agentCounts: { tracer: cases.length, analyst: cases.length, monitor: 0, coordinator: cases.length },
+          dailyHops: [0, 0, 0, 0, 0, 0, 0],
+          trailCounts: {},
+        };
+        setStats(computed);
       } else {
-        try { const c = localStorage.getItem('prowl-stats'); if (c) setStats(JSON.parse(c)); } catch { /* */ }
+        // Try cached stats as last resort
+        try {
+          const raw = localStorage.getItem('prowl-stats');
+          if (raw) setStats(JSON.parse(raw));
+        } catch { /* */ }
+      }
+
+      // Load activity feed from the most recent case's cached events
+      if (cases.length > 0) {
+        const recentCase = cases[0];
+        // Try server first
+        try {
+          const caseRes = await fetch(`/api/investigate?caseId=${recentCase.case_id}`);
+          if (caseRes.ok) {
+            const caseData = await caseRes.json();
+            if (caseData.events?.length > 0) {
+              setActivities(caseData.events.map((e: Activity) => ({
+                agent: e.agent, action: e.action, data: e.data || {}, timestamp: e.timestamp,
+              })).reverse());
+              return;
+            }
+          }
+        } catch { /* */ }
+        // Fall back to localStorage events
+        try {
+          const raw = localStorage.getItem(`prowl-feed-${recentCase.case_id}`);
+          if (raw) {
+            const events = JSON.parse(raw);
+            setActivities(events.map((e: Activity) => ({
+              agent: e.agent, action: e.action, data: e.data || {}, timestamp: e.timestamp,
+            })).reverse());
+          }
+        } catch { /* */ }
       }
     } catch {
       try { const c = localStorage.getItem('prowl-stats'); if (c) setStats(JSON.parse(c)); } catch { /* */ }
@@ -115,9 +166,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
-    // Poll for updates every 5 seconds (SSE doesn't work on serverless)
-    const interval = setInterval(fetchData, 5000);
-    return () => clearInterval(interval);
   }, [fetchData]);
 
   // Derived values
