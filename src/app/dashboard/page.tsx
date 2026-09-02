@@ -300,12 +300,6 @@ export default function Dashboard() {
         <section>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
             <h2 style={{ fontSize: 25, fontWeight: 400, margin: 0, fontFamily: 'var(--font-heading)' }}>Live feed</h2>
-            <span style={{
-              width: 8, height: 8, borderRadius: 999,
-              background: activities.length > 0 ? 'var(--color-status-solved)' : 'var(--color-neutral-400)',
-              boxShadow: activities.length > 0 ? '0 0 6px var(--color-status-solved)' : 'none',
-              animation: activities.length > 0 ? 'pw-blink 2s infinite' : 'none',
-            }} />
             <span style={{ fontSize: 11, color: 'var(--color-neutral-600)', fontFamily: 'var(--font-mono)' }}>
               {activities.length > 0 ? `${activities.length} events` : 'Waiting for agent activity…'}
             </span>
