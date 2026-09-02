@@ -169,8 +169,8 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
   const [feed, setFeed] = useState<FeedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'feed' | 'hops' | 'analysis'>('feed');
+  const [pipelineDone, setPipelineDone] = useState(false);
   const feedRef = useRef<HTMLDivElement>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -178,6 +178,21 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
       if (res.ok) {
         const data = await res.json();
         setCaseData(data.case);
+        // Update feed from server-side event log
+        if (data.events && data.events.length > 0) {
+          setFeed(data.events.map((e: { agent: string; action: string; data: Record<string, unknown>; timestamp: string }) => ({
+            id: `${e.agent}-${e.action}-${e.timestamp}`,
+            agent: e.agent,
+            action: e.action,
+            data: e.data || {},
+            timestamp: e.timestamp,
+          })).reverse());
+          try { localStorage.setItem(`prowl-feed-${id}`, JSON.stringify(data.events)); } catch { /* */ }
+        }
+        // Check if pipeline is done (status moved past 'active')
+        if (data.case?.status && data.case.status !== 'active') {
+          setPipelineDone(true);
+        }
         // Cache in localStorage so the case survives serverless cold starts
         try { localStorage.setItem(`prowl-case-${id}`, JSON.stringify(data.case)); } catch { /* */ }
       } else {
@@ -185,6 +200,15 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
         try {
           const cached = localStorage.getItem(`prowl-case-${id}`);
           if (cached) setCaseData(JSON.parse(cached));
+          const cachedFeed = localStorage.getItem(`prowl-feed-${id}`);
+          if (cachedFeed) {
+            const events = JSON.parse(cachedFeed);
+            setFeed(events.map((e: { agent: string; action: string; data: Record<string, unknown>; timestamp: string }) => ({
+              id: `${e.agent}-${e.action}-${e.timestamp}`,
+              agent: e.agent, action: e.action, data: e.data || {}, timestamp: e.timestamp,
+            })).reverse());
+          }
+          setPipelineDone(true);
         } catch { /* */ }
       }
       const memRes = await fetch('/api/memory');
@@ -226,38 +250,14 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
   // Initial fetch
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // SSE stream for real-time updates
+  // Poll for updates while the pipeline is running
   useEffect(() => {
-    const es = new EventSource('/api/investigate/stream');
-    eventSourceRef.current = es;
-
-    es.onmessage = (e) => {
-      try {
-        const update = JSON.parse(e.data);
-        if (update.action === 'connected') return;
-
-        // Only show events for this case (or show all if no caseId filter)
-        if (update.caseId && update.caseId !== id) return;
-
-        const event: FeedEvent = {
-          id: `${update.agent}-${update.action}-${Date.now()}`,
-          agent: update.agent,
-          action: update.action,
-          data: update.data || {},
-          timestamp: update.timestamp || new Date().toISOString(),
-        };
-
-        setFeed(prev => [event, ...prev].slice(0, 100));
-
-        // Refresh data when pipeline stages complete
-        if (['tracing_complete', 'analysis_complete', 'case_solved', 'monitoring_setup', 'reanalysis_complete'].includes(update.action)) {
-          fetchData();
-        }
-      } catch { /* ignore malformed */ }
-    };
-
-    return () => { es.close(); };
-  }, [id, fetchData]);
+    if (pipelineDone) return;
+    const interval = setInterval(() => {
+      fetchData();
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [pipelineDone, fetchData]);
 
   // Auto-scroll feed
   useEffect(() => {

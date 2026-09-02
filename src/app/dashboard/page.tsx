@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import DashboardShell from '@/components/DashboardShell';
 
@@ -74,7 +74,6 @@ export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
-  const eventSourceRef = useRef<EventSource | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -87,6 +86,22 @@ export default function Dashboard() {
         }
         if (data.cases) {
           try { localStorage.setItem('prowl-cases', JSON.stringify(data.cases)); } catch { /* */ }
+          // Fetch events for the most recent active case to populate the activity feed
+          const activeCases = (data.cases as { case_id: string; status: string }[])
+            .filter(c => c.status === 'active' || c.status === 'monitoring');
+          if (activeCases.length > 0) {
+            try {
+              const caseRes = await fetch(`/api/investigate?caseId=${activeCases[0].case_id}`);
+              if (caseRes.ok) {
+                const caseData = await caseRes.json();
+                if (caseData.events?.length > 0) {
+                  setActivities(caseData.events.map((e: Activity) => ({
+                    agent: e.agent, action: e.action, data: e.data || {}, timestamp: e.timestamp,
+                  })).reverse());
+                }
+              }
+            } catch { /* */ }
+          }
         }
       } else {
         try { const c = localStorage.getItem('prowl-stats'); if (c) setStats(JSON.parse(c)); } catch { /* */ }
@@ -100,19 +115,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
-    const es = new EventSource('/api/investigate/stream');
-    eventSourceRef.current = es;
-    es.onmessage = (e) => {
-      try {
-        const update = JSON.parse(e.data) as Activity;
-        if (update.action === 'connected') return;
-        setActivities((prev) => [update, ...prev].slice(0, 50));
-        if (['tracing_complete', 'analysis_complete', 'case_solved', 'monitoring_setup'].includes(update.action)) {
-          fetchData();
-        }
-      } catch { /* ignore */ }
-    };
-    return () => { es.close(); };
+    // Poll for updates every 5 seconds (SSE doesn't work on serverless)
+    const interval = setInterval(fetchData, 5000);
+    return () => clearInterval(interval);
   }, [fetchData]);
 
   // Derived values

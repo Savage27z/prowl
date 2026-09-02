@@ -19,6 +19,13 @@ export interface InvestigationUpdate {
 
 type UpdateCallback = (update: InvestigationUpdate) => void;
 
+// Per-case event log — stored in module scope so it survives across calls within one Lambda
+const _eventLog = new Map<string, InvestigationUpdate[]>();
+
+export function getCaseEvents(caseId: string): InvestigationUpdate[] {
+  return _eventLog.get(caseId) || [];
+}
+
 export class Coordinator {
   private memory = getSibylMemory();
   private tracer = new TracerAgent();
@@ -32,6 +39,10 @@ export class Coordinator {
 
   private emit(update: Omit<InvestigationUpdate, 'timestamp'>): void {
     const fullUpdate = { ...update, timestamp: new Date().toISOString() };
+    // Store in per-case event log for polling
+    const events = _eventLog.get(update.caseId) || [];
+    events.push(fullUpdate);
+    _eventLog.set(update.caseId, events);
     this.onUpdate?.(fullUpdate);
   }
 

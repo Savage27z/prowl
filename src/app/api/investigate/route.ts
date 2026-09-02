@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { after } from 'next/server';
 import { getSharedCoordinator } from '@/agents/shared';
+import { getCaseEvents } from '@/agents/coordinator';
 import { isValidAddress, isValidTxHash } from '@/chain/utils';
 import { requireAuth } from '@/lib/auth';
 
@@ -114,7 +115,9 @@ export async function GET(req: NextRequest) {
       if (!caseData) {
         return NextResponse.json({ error: 'Case not found' }, { status: 404 });
       }
-      return NextResponse.json({ case: caseData });
+      // Include pipeline events for polling-based live feed
+      const events = getCaseEvents(caseId);
+      return NextResponse.json({ case: caseData, events });
     }
 
     const cases = await coordinator.getAllCases();
