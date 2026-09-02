@@ -19,14 +19,28 @@ export default function Patterns() {
 
   useEffect(() => {
     (async () => {
+      let patterns: Pattern[] = [];
       try {
         const res = await fetch('/api/patterns');
         if (res.ok) {
           const data = await res.json();
-          setApiPatterns(data.patterns || []);
+          patterns = data.patterns || [];
+          if (patterns.length > 0) {
+            try { localStorage.setItem('prowl-patterns', JSON.stringify(patterns)); } catch { /* */ }
+          }
         }
       } catch { /* api unavailable */ }
-      finally { setLoading(false); }
+
+      // Fall back to localStorage on cold start
+      if (patterns.length === 0) {
+        try {
+          const raw = localStorage.getItem('prowl-patterns');
+          if (raw) patterns = JSON.parse(raw);
+        } catch { /* */ }
+      }
+
+      setApiPatterns(patterns);
+      setLoading(false);
     })();
   }, []);
 

@@ -18,22 +18,32 @@ export default function Payouts() {
 
   useEffect(() => {
     (async () => {
+      let cases: Record<string, unknown>[] = [];
       try {
-        // Pull solved cases and derive payouts from them
         const res = await fetch('/api/investigate');
         if (res.ok) {
           const data = await res.json();
-          const solved = (data.cases || []).filter((c: Record<string, unknown>) => c.status === 'solved');
-          setPayouts(solved.map((c: Record<string, unknown>) => ({
-            case_id: c.case_id as string,
-            recipient: (c.victim_wallet as string)?.slice(0, 6) + '…' + (c.victim_wallet as string)?.slice(-4),
-            amount: parseFloat(((c.reward as string) || '0').replace(/[^\d.]/g, '')) || 0,
-            released: new Date(c.solved_at as string || c.created_at as string).toLocaleDateString(),
-            tx: '—',
-          })));
+          cases = data.cases || [];
         }
       } catch { /* api unavailable */ }
-      finally { setLoading(false); }
+
+      // Fall back to localStorage on cold start
+      if (cases.length === 0) {
+        try {
+          const raw = localStorage.getItem('prowl-cases');
+          if (raw) cases = JSON.parse(raw);
+        } catch { /* */ }
+      }
+
+      const solved = cases.filter(c => c.status === 'solved');
+      setPayouts(solved.map(c => ({
+        case_id: c.case_id as string,
+        recipient: (c.victim_wallet as string)?.slice(0, 6) + '…' + (c.victim_wallet as string)?.slice(-4),
+        amount: parseFloat(((c.reward as string) || '0').replace(/[^\d.]/g, '')) || 0,
+        released: new Date(c.solved_at as string || c.created_at as string).toLocaleDateString(),
+        tx: '—',
+      })));
+      setLoading(false);
     })();
   }, []);
 

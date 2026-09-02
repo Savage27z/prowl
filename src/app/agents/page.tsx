@@ -25,30 +25,41 @@ export default function Agents() {
 
   useEffect(() => {
     (async () => {
+      let cases: { agents_involved?: string[] }[] = [];
       try {
         const res = await fetch('/api/investigate');
         if (res.ok) {
           const data = await res.json();
-          const cases = data.cases || [];
-          // Build agent info from live case data
-          const agentTasks: Record<string, number> = { tracer: 0, analyst: 0, monitor: 0, coordinator: 0 };
-          for (const c of cases) {
-            if (c.agents_involved) {
-              for (const a of c.agents_involved) {
-                if (agentTasks[a] !== undefined) agentTasks[a]++;
-              }
-            }
-          }
-          const built: AgentInfo[] = Object.entries(AGENT_META).map(([key, meta]) => ({
-            ...meta,
-            status: agentTasks[key] > 0 ? 'Active' : 'Idle',
-            desc: agentTasks[key] > 0 ? `Working on ${agentTasks[key]} case${agentTasks[key] > 1 ? 's' : ''}.` : 'No active tasks.',
-            tasks: agentTasks[key],
-          }));
-          setAgents(built);
+          cases = data.cases || [];
         }
       } catch { /* api unavailable */ }
-      finally { setLoading(false); }
+
+      // Merge with localStorage — serverless cold starts return empty
+      if (cases.length === 0) {
+        try {
+          const raw = localStorage.getItem('prowl-cases');
+          if (raw) cases = JSON.parse(raw);
+        } catch { /* */ }
+      }
+
+      if (cases.length > 0) {
+        const agentTasks: Record<string, number> = { tracer: 0, analyst: 0, monitor: 0, coordinator: 0 };
+        for (const c of cases) {
+          if (c.agents_involved) {
+            for (const a of c.agents_involved) {
+              if (agentTasks[a] !== undefined) agentTasks[a]++;
+            }
+          }
+        }
+        const built: AgentInfo[] = Object.entries(AGENT_META).map(([key, meta]) => ({
+          ...meta,
+          status: agentTasks[key] > 0 ? 'Active' : 'Idle',
+          desc: agentTasks[key] > 0 ? `Working on ${agentTasks[key]} case${agentTasks[key] > 1 ? 's' : ''}.` : 'No active tasks.',
+          tasks: agentTasks[key],
+        }));
+        setAgents(built);
+      }
+      setLoading(false);
     })();
   }, []);
 

@@ -16,13 +16,14 @@ export default function Memory() {
   const [loading, setLoading] = useState(true);
 
   const fetchMemory = useCallback(async () => {
+    let all: MemoryEntry[] = [];
+
+    // Try server first
     try {
       const res = await fetch('/api/memory');
       if (res.ok) {
         const data = await res.json();
         const collections = data.collections || {};
-        const all: MemoryEntry[] = [];
-
         for (const [, items] of Object.entries(collections)) {
           if (Array.isArray(items)) {
             for (const item of items) {
@@ -35,10 +36,46 @@ export default function Memory() {
             }
           }
         }
-        setEntries(all);
+        if (all.length > 0) {
+          try { localStorage.setItem('prowl-memory', JSON.stringify(all)); } catch { /* */ }
+        }
       }
     } catch { /* api unavailable */ }
-    finally { setLoading(false); }
+
+    // Fall back to localStorage on cold start
+    if (all.length === 0) {
+      try {
+        const raw = localStorage.getItem('prowl-memory');
+        if (raw) all = JSON.parse(raw);
+      } catch { /* */ }
+
+      // Also try aggregating from per-case cached data
+      if (all.length === 0) {
+        try {
+          const casesRaw = localStorage.getItem('prowl-cases');
+          if (casesRaw) {
+            const cases = JSON.parse(casesRaw) as { case_id: string }[];
+            for (const c of cases) {
+              const hopsRaw = localStorage.getItem(`prowl-hops-${c.case_id}`);
+              if (hopsRaw) {
+                for (const h of JSON.parse(hopsRaw)) {
+                  all.push({ id: h.from_address || '—', description: h.flag_reason || `Hop ${h.hop_number}: ${h.amount} ETH`, case_id: c.case_id });
+                }
+              }
+              const analysisRaw = localStorage.getItem(`prowl-analysis-${c.case_id}`);
+              if (analysisRaw) {
+                for (const a of JSON.parse(analysisRaw)) {
+                  all.push({ id: a.address_analyzed || '—', description: a.notes || `${a.risk_level} risk`, case_id: c.case_id });
+                }
+              }
+            }
+          }
+        } catch { /* */ }
+      }
+    }
+
+    setEntries(all);
+    setLoading(false);
   }, []);
 
   useEffect(() => { fetchMemory(); }, [fetchMemory]);
