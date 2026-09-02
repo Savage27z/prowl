@@ -96,129 +96,75 @@ export class ChainReader {
     }
   }
 
-  // Get all outgoing transactions from an address (via Basescan)
-  async getOutgoingTransactions(address: string, startBlock = 0): Promise<Transaction[]> {
+  // Helper: fetch from Blockscout V2 REST API with timeout
+  private async fetchV2(path: string, timeoutMs = 12000): Promise<Record<string, unknown>> {
+    const baseUrl = EXPLORER_API.replace(/\/api$/, '');
+    const apiUrl = `${baseUrl}/api/v2${path}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const url = new URL(EXPLORER_API);
-      url.searchParams.set('module', 'account');
-      url.searchParams.set('action', 'txlist');
-      url.searchParams.set('address', address);
-      url.searchParams.set('startblock', String(startBlock));
-      url.searchParams.set('endblock', '99999999');
-      url.searchParams.set('sort', 'asc');
-
-
-      console.log(`[ChainReader] Fetching outgoing txs for ${address} from ${EXPLORER_API}`);
-      const response = await fetch(url.toString());
-      const data = await response.json();
-
-      console.log(`[ChainReader] Basescan response status=${data.status} message=${data.message} resultCount=${Array.isArray(data.result) ? data.result.length : 'N/A'}`);
-      if (data.status !== '1' || !data.result) return [];
-
-      const outgoing = data.result
-        .filter((tx: Record<string, string>) => tx.from.toLowerCase() === address.toLowerCase());
-      console.log(`[ChainReader] Outgoing txs from ${address}: ${outgoing.length}`);
-
-      return outgoing
-        .map((tx: Record<string, string>) => ({
-          hash: tx.hash,
-          from: tx.from,
-          to: tx.to,
-          value: this.weiToEth(tx.value),
-          timestamp: new Date(parseInt(tx.timeStamp) * 1000).toISOString(),
-          blockNumber: parseInt(tx.blockNumber),
-          gasUsed: tx.gasUsed,
-          input: tx.input,
-          isError: tx.isError === '1',
-        }));
-    } catch {
-      return [];
-    }
-  }
-
-  // Get internal transactions by tx hash (for tracking fund splits through contracts)
-  async getInternalTransactions(txHash: string): Promise<InternalTx[]> {
-    try {
-      const url = new URL(EXPLORER_API);
-      url.searchParams.set('module', 'account');
-      url.searchParams.set('action', 'txlistinternal');
-      url.searchParams.set('txhash', txHash);
-
-
-      const response = await fetch(url.toString());
-      const data = await response.json();
-
-      if (data.status !== '1' || !data.result) return [];
-
-      return data.result.map((tx: Record<string, string>) => ({
-        hash: tx.hash || txHash,
-        from: tx.from,
-        to: tx.to,
-        value: this.weiToEth(tx.value),
-        type: tx.type,
-      }));
-    } catch {
-      return [];
-    }
-  }
-
-  // Get internal transactions by address (drains via contract calls)
-  // Uses Blockscout V2 REST API — much faster than the V1 etherscan-compat endpoint
-  async getInternalTransactionsByAddress(address: string, _startBlock = 0): Promise<Transaction[]> {
-    try {
-      // Blockscout V2: /api/v2/addresses/{hash}/internal-transactions?filter=from
-      const baseUrl = EXPLORER_API.replace(/\/api$/, '');
-      const apiUrl = `${baseUrl}/api/v2/addresses/${address}/internal-transactions?filter=from`;
-
-      console.log(`[ChainReader] Fetching internal txs for ${address} via V2 API`);
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
       const response = await fetch(apiUrl, { signal: controller.signal });
       clearTimeout(timeout);
-
-      const data = await response.json();
-      const items = data.items || [];
-
-      console.log(`[ChainReader] Internal txs V2 response: ${items.length} items`);
-
-      return items
-        .filter((tx: Record<string, unknown>) => {
-          const from = tx.from as Record<string, string> | null;
-          return from?.hash?.toLowerCase() === address.toLowerCase();
-        })
-        .map((tx: Record<string, unknown>) => {
-          const from = tx.from as Record<string, string>;
-          const to = tx.to as Record<string, string>;
-          const val = String(tx.value || '0');
-          return {
-            hash: (tx.transaction_hash || '') as string,
-            from: from?.hash || '',
-            to: to?.hash || '',
-            value: this.weiToEth('0x' + BigInt(val).toString(16)),
-            timestamp: (tx.timestamp || new Date().toISOString()) as string,
-            blockNumber: (tx.block_number || 0) as number,
-            gasUsed: '0',
-            input: '0x',
-            isError: false,
-          };
-        });
+      return await response.json() as Record<string, unknown>;
     } catch (err) {
-      console.error(`[ChainReader] getInternalTransactionsByAddress error:`, err);
-      return [];
+      clearTimeout(timeout);
+      throw err;
     }
   }
 
-  // Get ALL outgoing transactions (regular + internal) — the full money trail
-  async getAllOutgoingTransactions(address: string, startBlock = 0): Promise<Transaction[]> {
-    const [regular, internal] = await Promise.all([
-      this.getOutgoingTransactions(address, startBlock),
-      this.getInternalTransactionsByAddress(address, startBlock),
-    ]);
+  // Parse a V2 transaction item into our Transaction format
+  private parseV2Tx(tx: Record<string, unknown>): Transaction {
+    const from = tx.from as Record<string, string> | null;
+    const to = tx.to as Record<string, string> | null;
+    const val = String(tx.value || '0');
+    return {
+      hash: (tx.hash || tx.transaction_hash || '') as string,
+      from: from?.hash || '',
+      to: to?.hash || '',
+      value: this.weiToEth('0x' + BigInt(val).toString(16)),
+      timestamp: (tx.timestamp || new Date().toISOString()) as string,
+      blockNumber: (tx.block_number || tx.block || 0) as number,
+      gasUsed: String(tx.gas_used || '0'),
+      input: '0x',
+      isError: tx.status === 'error',
+    };
+  }
 
-    // Merge and deduplicate by tx hash, sort by timestamp
+  // Get ALL outgoing transactions (regular + internal) via Blockscout V2
+  // Runs sequentially to avoid rate limits on serverless
+  async getAllOutgoingTransactions(address: string, _startBlock = 0): Promise<Transaction[]> {
+    const allTxs: Transaction[] = [];
+
+    // 1. Regular outgoing transactions
+    try {
+      console.log(`[ChainReader] V2: Fetching regular txs from ${address}`);
+      const data = await this.fetchV2(`/addresses/${address}/transactions?filter=from`);
+      const items = (data.items || []) as Record<string, unknown>[];
+      console.log(`[ChainReader] V2: ${items.length} regular txs`);
+      for (const tx of items) {
+        allTxs.push(this.parseV2Tx(tx));
+      }
+    } catch (err) {
+      console.error(`[ChainReader] V2 regular txs error:`, err);
+    }
+
+    // 2. Internal outgoing transactions (contract call drains)
+    try {
+      console.log(`[ChainReader] V2: Fetching internal txs from ${address}`);
+      const data = await this.fetchV2(`/addresses/${address}/internal-transactions?filter=from`);
+      const items = (data.items || []) as Record<string, unknown>[];
+      console.log(`[ChainReader] V2: ${items.length} internal txs`);
+      for (const tx of items) {
+        allTxs.push(this.parseV2Tx(tx));
+      }
+    } catch (err) {
+      console.error(`[ChainReader] V2 internal txs error:`, err);
+    }
+
+    // Deduplicate by tx hash + recipient + value, keep only value > 0
     const seen = new Set<string>();
     const merged: Transaction[] = [];
-    for (const tx of [...regular, ...internal]) {
+    for (const tx of allTxs) {
       const key = `${tx.hash}-${tx.to}-${tx.value}`;
       if (!seen.has(key) && parseFloat(tx.value) > 0) {
         seen.add(key);
@@ -226,9 +172,32 @@ export class ChainReader {
       }
     }
 
-    merged.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-    console.log(`[ChainReader] All outgoing from ${address}: ${regular.length} regular + ${internal.length} internal = ${merged.length} merged`);
+    // Sort by value descending (follow the money)
+    merged.sort((a, b) => parseFloat(b.value) - parseFloat(a.value));
+    console.log(`[ChainReader] V2: ${merged.length} merged outgoing txs with value > 0`);
     return merged;
+  }
+
+  // Get internal transactions by tx hash (legacy — kept for other callers)
+  async getInternalTransactions(txHash: string): Promise<InternalTx[]> {
+    try {
+      const data = await this.fetchV2(`/transactions/${txHash}/internal-transactions`);
+      const items = (data.items || []) as Record<string, unknown>[];
+      return items.map((tx) => {
+        const from = tx.from as Record<string, string> | null;
+        const to = tx.to as Record<string, string> | null;
+        const val = String(tx.value || '0');
+        return {
+          hash: txHash,
+          from: from?.hash || '',
+          to: to?.hash || '',
+          value: this.weiToEth('0x' + BigInt(val).toString(16)),
+          type: (tx.type || 'call') as string,
+        };
+      });
+    } catch {
+      return [];
+    }
   }
 
   // Get wallet balance
@@ -307,36 +276,14 @@ export class ChainReader {
   // Check latest transaction timestamp for a wallet (for Monitor agent)
   async getLatestActivity(address: string): Promise<{ hasNewActivity: boolean; latestTx: Transaction | null }> {
     try {
-      const url = new URL(EXPLORER_API);
-      url.searchParams.set('module', 'account');
-      url.searchParams.set('action', 'txlist');
-      url.searchParams.set('address', address);
-      url.searchParams.set('page', '1');
-      url.searchParams.set('offset', '1');
-      url.searchParams.set('sort', 'desc');
-
-
-      const response = await fetch(url.toString());
-      const data = await response.json();
-
-      if (data.status !== '1' || !data.result?.length) {
+      const data = await this.fetchV2(`/addresses/${address}/transactions?filter=from`);
+      const items = (data.items || []) as Record<string, unknown>[];
+      if (items.length === 0) {
         return { hasNewActivity: false, latestTx: null };
       }
-
-      const tx = data.result[0];
       return {
         hasNewActivity: true,
-        latestTx: {
-          hash: tx.hash,
-          from: tx.from,
-          to: tx.to,
-          value: this.weiToEth(tx.value),
-          timestamp: new Date(parseInt(tx.timeStamp) * 1000).toISOString(),
-          blockNumber: parseInt(tx.blockNumber),
-          gasUsed: tx.gasUsed,
-          input: tx.input,
-          isError: tx.isError === '1',
-        },
+        latestTx: this.parseV2Tx(items[0]),
       };
     } catch {
       return { hasNewActivity: false, latestTx: null };
