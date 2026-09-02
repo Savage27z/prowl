@@ -74,6 +74,25 @@ export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const chartRef = useCallback((node: SVGSVGElement | null) => {
+    if (!node) return;
+    const handler = (e: MouseEvent) => {
+      const rect = node.getBoundingClientRect();
+      const scaleX = 620 / rect.width;
+      const svgX = (e.clientX - rect.left) * scaleX;
+      // Find nearest data point
+      const padX = 34;
+      const usableW = 620 - padX;
+      const step = usableW / Math.max(6, 1); // 7 data points = 6 gaps
+      const idx = Math.round(Math.max(0, Math.min(6, (svgX - padX) / step)));
+      setHoverIdx(idx);
+    };
+    const leave = () => setHoverIdx(null);
+    node.addEventListener('pointermove', handler);
+    node.addEventListener('pointerleave', leave);
+    // cleanup via unmount — React re-mounts rarely for this
+  }, []);
 
   const fetchData = useCallback(async () => {
     try {
@@ -108,17 +127,36 @@ export default function Dashboard() {
         setStats(stats);
         try { localStorage.setItem('prowl-stats', JSON.stringify(stats)); } catch { /* */ }
       } else if (cases.length > 0) {
-        // Compute basic stats from cached cases
+        // Compute stats from cached cases including hop data
+        let computedHops = 0;
+        let computedFunds = 0;
+        const dailyBuckets = [0, 0, 0, 0, 0, 0, 0];
+        const watchedSet = new Set<string>();
+
+        for (const c of cases as Record<string, unknown>[]) {
+          const hops = (c.total_hops_traced as number) || 0;
+          computedHops += hops;
+          const fundsStr = (c.total_funds_traced as string) || '0';
+          computedFunds += parseFloat(fundsStr) || 0;
+
+          // Distribute hops across days based on case creation
+          const created = new Date((c.created_at as string) || Date.now());
+          const dayIdx = (created.getDay() + 6) % 7; // Mon=0
+          dailyBuckets[dayIdx] += Math.max(hops, 1); // At least 1 for the case
+
+          if (c.victim_wallet) watchedSet.add(c.victim_wallet as string);
+        }
+
         const computed: Stats = {
           totalCases: cases.length,
           activeCases: cases.filter(c => c.status === 'active' || c.status === 'monitoring').length,
           solvedCases: cases.filter(c => c.status === 'solved').length,
           totalPatterns: 0,
-          watchedAddresses: 0,
-          totalHops: 0,
-          totalFundsEth: 0,
+          watchedAddresses: watchedSet.size,
+          totalHops: Math.max(computedHops, cases.length), // at least 1 per case
+          totalFundsEth: computedFunds,
           agentCounts: { tracer: cases.length, analyst: cases.length, monitor: 0, coordinator: cases.length },
-          dailyHops: [0, 0, 0, 0, 0, 0, 0],
+          dailyHops: dailyBuckets,
           trailCounts: {},
         };
         setStats(computed);
@@ -292,7 +330,7 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <>
-                  <svg viewBox={`0 0 ${chartW} ${chartH + 20}`} preserveAspectRatio="none" style={{ width: '100%', height: 220, display: 'block', overflow: 'visible' }}>
+                  <svg ref={chartRef} viewBox={`0 0 ${chartW} ${chartH + 20}`} preserveAspectRatio="none" style={{ width: '100%', height: 220, display: 'block', overflow: 'visible', cursor: 'crosshair', touchAction: 'none' }}>
                     {yLabels.map((l) => (
                       <g key={l.val}>
                         <line x1="34" y1={l.y} x2={chartW} y2={l.y} stroke="var(--color-divider)" strokeWidth="1" />
@@ -301,14 +339,42 @@ export default function Dashboard() {
                     ))}
                     <path d={chartArea} fill="var(--color-accent-100)" opacity="0.85" />
                     <path d={chartLine} fill="none" stroke="var(--color-accent)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                    {peakPoint && (
+                    {/* Hover tracking line + dot */}
+                    {hoverIdx !== null && chartPoints?.[hoverIdx] && (
+                      <>
+                        <line x1={chartPoints[hoverIdx].x} y1={18} x2={chartPoints[hoverIdx].x} y2={chartH} stroke="var(--color-accent-700)" strokeWidth="1" strokeDasharray="3 4" opacity="0.7" />
+                        <circle cx={chartPoints[hoverIdx].x} cy={chartPoints[hoverIdx].y} r="5" fill="var(--color-card)" stroke="var(--color-accent)" strokeWidth="2.4" />
+                      </>
+                    )}
+                    {/* Static peak dot when NOT hovering */}
+                    {hoverIdx === null && peakPoint && (
                       <>
                         <line x1={peakPoint.x} y1={18} x2={peakPoint.x} y2={chartH} stroke="var(--color-neutral-400)" strokeWidth="1" strokeDasharray="3 4" />
                         <circle cx={peakPoint.x} cy={peakPoint.y} r="4.5" fill="var(--color-card)" stroke="var(--color-accent)" strokeWidth="2.4" />
                       </>
                     )}
+                    {/* Invisible hit targets for each data point (better touch/pointer accuracy) */}
+                    {chartPoints?.map((p, i) => (
+                      <rect key={i} x={p.x - 20} y={0} width={40} height={chartH + 20} fill="transparent" />
+                    ))}
                   </svg>
-                  {peakPoint && (
+                  {/* Hover tooltip */}
+                  {hoverIdx !== null && chartPoints?.[hoverIdx] && (
+                    <div style={{
+                      position: 'absolute', left: `${(chartPoints[hoverIdx].x / chartW) * 100}%`, top: 10, transform: 'translateX(-50%)',
+                      background: 'var(--color-card)', border: '1px solid var(--color-accent-300)',
+                      borderRadius: 'var(--radius-md)',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                      padding: '6px 11px', fontFamily: 'var(--font-mono)', fontSize: 12,
+                      fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+                      pointerEvents: 'none', zIndex: 10,
+                    }}>
+                      <span style={{ color: 'var(--color-accent-700)', fontWeight: 600 }}>{dailyHops[hoverIdx].toLocaleString()}</span>
+                      <span style={{ color: 'var(--color-neutral-600)', marginLeft: 6, fontSize: 10 }}>{DAYS[hoverIdx]}</span>
+                    </div>
+                  )}
+                  {/* Static peak tooltip when NOT hovering */}
+                  {hoverIdx === null && peakPoint && (
                     <div style={{
                       position: 'absolute', left: `${(peakPoint.x / chartW) * 100}%`, top: 10, transform: 'translateX(-50%)',
                       background: 'var(--color-card)', border: '1px solid var(--color-divider)',
