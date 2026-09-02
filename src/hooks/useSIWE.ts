@@ -2,7 +2,7 @@
 // Manages nonce fetching, message signing, and session verification
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAccount, useSignMessage } from 'wagmi';
 import { SiweMessage } from 'siwe';
 
@@ -19,7 +19,7 @@ export function useSIWE() {
   const [signing, setSigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Check existing session on mount
+  // Check existing session on mount and auto-sign-in if wallet connected but session expired
   const checkSession = useCallback(async () => {
     try {
       const res = await fetch('/api/auth/session');
@@ -39,6 +39,19 @@ export function useSIWE() {
   useEffect(() => {
     checkSession();
   }, [checkSession]);
+
+  // Auto-sign-in: if wallet is connected but session is gone, trigger sign-in automatically
+  const autoSignAttempted = useRef(false);
+  useEffect(() => {
+    if (!loading && isConnected && address && !session && !signing && !autoSignAttempted.current) {
+      autoSignAttempted.current = true;
+      signIn();
+    }
+    // Reset flag when wallet disconnects so it can auto-sign again next connect
+    if (!isConnected) {
+      autoSignAttempted.current = false;
+    }
+  }, [loading, isConnected, address, session, signing, signIn]);
 
   // Clear session when wallet disconnects
   useEffect(() => {

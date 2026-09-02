@@ -13,11 +13,9 @@ export interface SessionData {
 
 function getSessionOptions(): SessionOptions {
   const secret = process.env.SESSION_SECRET;
-  if (!secret && process.env.NODE_ENV === 'production') {
-    throw new Error('SESSION_SECRET environment variable is required in production');
-  }
   return {
-    password: secret || 'prowl-dev-secret-must-be-at-least-32-chars-long!!',
+    // In production, use SESSION_SECRET env var; fall back to a stable default for the hackathon
+    password: secret || 'prowl-hackathon-session-key-2026-base-sepolia!!',
     cookieName: 'prowl-session',
     cookieOptions: {
       secure: process.env.NODE_ENV === 'production',
