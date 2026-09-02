@@ -98,16 +98,23 @@ export function useSIWE() {
   }, [address, chainId, signMessageAsync]);
 
   // Auto-sign-in: if wallet is connected but session is gone, trigger sign-in automatically
-  const autoSignAttempted = useRef(false);
+  const autoSignAttempted = useRef(0);
   useEffect(() => {
-    if (!loading && isConnected && address && !session && !signing && !autoSignAttempted.current) {
-      autoSignAttempted.current = true;
+    // Allow up to 2 auto-sign attempts (handles deployment transitions / cold starts)
+    if (!loading && isConnected && address && !session && !signing && autoSignAttempted.current < 2) {
+      const attempt = autoSignAttempted.current;
+      autoSignAttempted.current = attempt + 1;
+      // Delay retry by 2s
+      if (attempt > 0) {
+        const timer = setTimeout(() => signIn(), 2000);
+        return () => clearTimeout(timer);
+      }
       signIn();
     }
     if (!isConnected) {
-      autoSignAttempted.current = false;
+      autoSignAttempted.current = 0;
     }
-  }, [loading, isConnected, address, session, signing, signIn]);
+  }, [loading, isConnected, address, session, signing, signIn, error]);
 
   // Sign out
   const signOut = useCallback(async () => {
