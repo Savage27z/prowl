@@ -29,8 +29,8 @@ interface InternalTx {
   type: string;
 }
 
-const BASE_RPC = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
-const BASESCAN_API = 'https://api.basescan.org/api';
+const BASE_RPC = process.env.BASE_RPC_URL || 'https://sepolia.base.org';
+const BASESCAN_API = process.env.BASESCAN_API_URL || 'https://api-sepolia.basescan.org/api';
 const BASESCAN_KEY = process.env.BASESCAN_API_KEY || '';
 
 export class ChainReader {
