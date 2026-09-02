@@ -39,6 +39,7 @@ export class ChainReader {
   // Get transaction details
   async getTransaction(txHash: string): Promise<Transaction | null> {
     try {
+      console.log(`[ChainReader] Fetching tx ${txHash} from ${BASE_RPC}`);
       const response = await fetch(BASE_RPC, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -51,6 +52,7 @@ export class ChainReader {
       });
 
       const data = await response.json();
+      console.log(`[ChainReader] RPC response status=${response.status} hasResult=${!!data.result} error=${JSON.stringify(data.error || null)}`);
       if (!data.result) return null;
 
       const tx = data.result;
@@ -67,7 +69,8 @@ export class ChainReader {
         input: tx.input,
         isError: receipt?.status === '0x0',
       };
-    } catch {
+    } catch (err) {
+      console.error(`[ChainReader] getTransaction error:`, err);
       return null;
     }
   }
@@ -105,13 +108,18 @@ export class ChainReader {
       url.searchParams.set('sort', 'asc');
       url.searchParams.set('apikey', BASESCAN_KEY);
 
+      console.log(`[ChainReader] Fetching outgoing txs for ${address} from ${BASESCAN_API}`);
       const response = await fetch(url.toString());
       const data = await response.json();
 
+      console.log(`[ChainReader] Basescan response status=${data.status} message=${data.message} resultCount=${Array.isArray(data.result) ? data.result.length : 'N/A'}`);
       if (data.status !== '1' || !data.result) return [];
 
-      return data.result
-        .filter((tx: Record<string, string>) => tx.from.toLowerCase() === address.toLowerCase())
+      const outgoing = data.result
+        .filter((tx: Record<string, string>) => tx.from.toLowerCase() === address.toLowerCase());
+      console.log(`[ChainReader] Outgoing txs from ${address}: ${outgoing.length}`);
+
+      return outgoing
         .map((tx: Record<string, string>) => ({
           hash: tx.hash,
           from: tx.from,
