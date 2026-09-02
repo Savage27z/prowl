@@ -245,9 +245,17 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
             {theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'System'}
           </button>
 
-          {/* Sign out */}
+          {/* Clear data */}
           <button
-            onClick={signOut}
+            onClick={() => {
+              try {
+                const keys = Object.keys(localStorage).filter(k => k.startsWith('prowl-'));
+                for (const k of keys) localStorage.removeItem(k);
+                // Also clear server memory
+                fetch('/api/memory?confirm=yes', { method: 'DELETE' }).catch(() => {});
+                window.location.reload();
+              } catch { /* */ }
+            }}
             type="button"
             style={{
               borderTop: '1px solid var(--color-divider)',
@@ -256,6 +264,24 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
               cursor: 'pointer', background: 'none', border: 'none',
               font: 'inherit', width: '100%', padding: '0',
               paddingBlockStart: 'var(--space-6)',
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+              <path d="M3 6h18M8 6V4h8v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+            </svg>
+            Clear data
+          </button>
+
+          {/* Sign out */}
+          <button
+            onClick={signOut}
+            type="button"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 9,
+              fontSize: '12.5px', color: 'var(--color-neutral-700)',
+              cursor: 'pointer', background: 'none', border: 'none',
+              font: 'inherit', width: '100%', padding: '0',
+              paddingBlockStart: 'var(--space-4)',
             }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
