@@ -19,8 +19,11 @@ interface TraceResult {
 
 export class TracerAgent {
   private memory = getSibylMemory();
-  private maxHops = 20;
-  private maxBranches = 5;
+  private maxHops = 8;          // max depth per branch
+  private maxBranches = 3;       // max branches to follow at each split
+  private maxTotalHops = 25;     // hard cap across ALL branches
+  private totalHopsTraced = 0;   // global counter
+  private traceDeadline = 0;     // timestamp ceiling (25s)
 
   // Start tracing from an incident transaction
   async startTrace(caseId: string, incidentTxHash: string, victimWallet: string): Promise<TraceResult> {
@@ -63,6 +66,10 @@ export class TracerAgent {
       traceStartAmount = tx.value;
     }
 
+    // Reset per-investigation limits
+    this.totalHopsTraced = 0;
+    this.traceDeadline = Date.now() + 25_000; // 25s hard ceiling
+
     // Trace the main branch
     const hops = await this.traceFromAddress(
       caseId,
@@ -93,9 +100,10 @@ export class TracerAgent {
     hopNumber: number,
     branchId: string
   ): Promise<Hop[]> {
-    if (hopNumber > this.maxHops) {
-      return [];
-    }
+    // Enforce all limits
+    if (hopNumber > this.maxHops) return [];
+    if (this.totalHopsTraced >= this.maxTotalHops) return [];
+    if (Date.now() > this.traceDeadline) return [];
 
     const hops: Hop[] = [];
 
@@ -116,6 +124,7 @@ export class TracerAgent {
         flag_reason: `Known address: ${known.label}`,
       };
       hops.push(hop);
+      this.totalHopsTraced++;
       await this.writeHop(hop);
       return hops;
     }
@@ -124,7 +133,6 @@ export class TracerAgent {
     const isContractAddr = await chain.isContract(address);
 
     // Get ALL outgoing transactions (regular + internal/contract calls)
-    // Internal txs catch drains via contract interactions (e.g. phishing approvals)
     const outgoingTxs = await chain.getAllOutgoingTransactions(address);
 
     if (outgoingTxs.length === 0) {
@@ -143,19 +151,43 @@ export class TracerAgent {
         flag_reason: 'Dead end — funds sitting in wallet',
       };
       hops.push(hop);
+      this.totalHopsTraced++;
       await this.writeHop(hop);
       return hops;
     }
 
-    // Check for fund splitting
-    const isSplit = outgoingTxs.length > 1;
-    if (isSplit) {
+    // Flag high-activity addresses (likely mixers, bots, or exchanges)
+    if (outgoingTxs.length > 500) {
+      const hop: Hop = {
+        case_id: caseId,
+        hop_number: hopNumber,
+        from_address: address,
+        to_address: address,
+        amount,
+        tx_hash: parentTxHash,
+        timestamp: new Date().toISOString(),
+        is_split: false,
+        branch_id: branchId,
+        flagged: true,
+        flag_reason: `High-activity address (${outgoingTxs.length} outgoing txs) — possible mixer/exchange`,
+      };
+      hops.push(hop);
+      this.totalHopsTraced++;
+      await this.writeHop(hop);
+      return hops;
     }
 
-    // Trace each branch (up to maxBranches)
-    const branchesToTrace = outgoingTxs.slice(0, this.maxBranches);
+    // Follow the money: sort by value (largest first) and take top branches
+    const sorted = [...outgoingTxs].sort((a, b) => parseFloat(b.value) - parseFloat(a.value));
+    const isSplit = sorted.length > 1;
+
+    // Take top branches by value
+    const branchesToTrace = sorted.slice(0, this.maxBranches);
 
     for (let i = 0; i < branchesToTrace.length; i++) {
+      // Check limits before each branch
+      if (this.totalHopsTraced >= this.maxTotalHops || Date.now() > this.traceDeadline) break;
+
       const tx = branchesToTrace[i];
       const newBranchId = isSplit ? `${branchId}-${i}` : branchId;
 
@@ -174,6 +206,7 @@ export class TracerAgent {
       };
 
       hops.push(hop);
+      this.totalHopsTraced++;
       await this.writeHop(hop);
 
       // Recursively trace the next hop
