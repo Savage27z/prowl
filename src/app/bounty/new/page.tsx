@@ -91,6 +91,14 @@ export default function PostBounty() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to start investigation');
       setStep('done');
+      // Cache case data so it survives serverless cold starts
+      try {
+        if (data.case) localStorage.setItem(`prowl-case-${data.caseId}`, JSON.stringify(data.case));
+        const existing = localStorage.getItem('prowl-cases');
+        const list = existing ? JSON.parse(existing) : [];
+        if (data.case) list.unshift(data.case);
+        localStorage.setItem('prowl-cases', JSON.stringify(list));
+      } catch { /* */ }
       router.push(`/case/${data.caseId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');

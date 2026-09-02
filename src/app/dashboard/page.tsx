@@ -81,10 +81,18 @@ export default function Dashboard() {
       const res = await fetch('/api/investigate');
       if (res.ok) {
         const data = await res.json();
-        if (data.stats) setStats(data.stats);
+        if (data.stats) {
+          setStats(data.stats);
+          try { localStorage.setItem('prowl-stats', JSON.stringify(data.stats)); } catch { /* */ }
+        }
+        if (data.cases) {
+          try { localStorage.setItem('prowl-cases', JSON.stringify(data.cases)); } catch { /* */ }
+        }
+      } else {
+        try { const c = localStorage.getItem('prowl-stats'); if (c) setStats(JSON.parse(c)); } catch { /* */ }
       }
     } catch {
-      // api unavailable
+      try { const c = localStorage.getItem('prowl-stats'); if (c) setStats(JSON.parse(c)); } catch { /* */ }
     } finally {
       setLoading(false);
     }

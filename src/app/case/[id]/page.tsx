@@ -178,17 +178,46 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
       if (res.ok) {
         const data = await res.json();
         setCaseData(data.case);
+        // Cache in localStorage so the case survives serverless cold starts
+        try { localStorage.setItem(`prowl-case-${id}`, JSON.stringify(data.case)); } catch { /* */ }
+      } else {
+        // Server lost the data (cold start) — try localStorage cache
+        try {
+          const cached = localStorage.getItem(`prowl-case-${id}`);
+          if (cached) setCaseData(JSON.parse(cached));
+        } catch { /* */ }
       }
       const memRes = await fetch('/api/memory');
       if (memRes.ok) {
         const memData = await memRes.json();
         const allHops = memData.collections?.HOPS || [];
         const allAnalyses = memData.collections?.ANALYSIS || [];
-        setHops(allHops.filter((h: HopData) => h.case_id === id));
-        setAnalyses(allAnalyses.filter((a: AnalysisData) => a.case_id === id));
+        const caseHops = allHops.filter((h: HopData) => h.case_id === id);
+        const caseAnalyses = allAnalyses.filter((a: AnalysisData) => a.case_id === id);
+        setHops(caseHops);
+        setAnalyses(caseAnalyses);
+        try {
+          localStorage.setItem(`prowl-hops-${id}`, JSON.stringify(caseHops));
+          localStorage.setItem(`prowl-analysis-${id}`, JSON.stringify(caseAnalyses));
+        } catch { /* */ }
+      } else {
+        try {
+          const cachedHops = localStorage.getItem(`prowl-hops-${id}`);
+          const cachedAnalyses = localStorage.getItem(`prowl-analysis-${id}`);
+          if (cachedHops) setHops(JSON.parse(cachedHops));
+          if (cachedAnalyses) setAnalyses(JSON.parse(cachedAnalyses));
+        } catch { /* */ }
       }
-    } catch (error) {
-      console.error('Failed to fetch case:', error);
+    } catch {
+      // Network error — try localStorage cache
+      try {
+        const cached = localStorage.getItem(`prowl-case-${id}`);
+        if (cached) setCaseData(JSON.parse(cached));
+        const cachedHops = localStorage.getItem(`prowl-hops-${id}`);
+        const cachedAnalyses = localStorage.getItem(`prowl-analysis-${id}`);
+        if (cachedHops) setHops(JSON.parse(cachedHops));
+        if (cachedAnalyses) setAnalyses(JSON.parse(cachedAnalyses));
+      } catch { /* */ }
     } finally {
       setLoading(false);
     }

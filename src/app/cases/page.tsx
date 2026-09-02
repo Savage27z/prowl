@@ -38,9 +38,15 @@ export default function Cases() {
         const res = await fetch('/api/investigate');
         if (res.ok) {
           const data = await res.json();
-          setCases(data.cases || []);
+          const list = data.cases || [];
+          setCases(list);
+          try { localStorage.setItem('prowl-cases', JSON.stringify(list)); } catch { /* */ }
+        } else {
+          try { const c = localStorage.getItem('prowl-cases'); if (c) setCases(JSON.parse(c)); } catch { /* */ }
         }
-      } catch { /* api unavailable */ }
+      } catch {
+        try { const c = localStorage.getItem('prowl-cases'); if (c) setCases(JSON.parse(c)); } catch { /* */ }
+      }
       finally { setLoading(false); }
     })();
   }, []);
