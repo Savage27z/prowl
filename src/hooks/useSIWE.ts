@@ -40,19 +40,6 @@ export function useSIWE() {
     checkSession();
   }, [checkSession]);
 
-  // Auto-sign-in: if wallet is connected but session is gone, trigger sign-in automatically
-  const autoSignAttempted = useRef(false);
-  useEffect(() => {
-    if (!loading && isConnected && address && !session && !signing && !autoSignAttempted.current) {
-      autoSignAttempted.current = true;
-      signIn();
-    }
-    // Reset flag when wallet disconnects so it can auto-sign again next connect
-    if (!isConnected) {
-      autoSignAttempted.current = false;
-    }
-  }, [loading, isConnected, address, session, signing, signIn]);
-
   // Clear session when wallet disconnects
   useEffect(() => {
     if (!isConnected && session) {
@@ -60,7 +47,7 @@ export function useSIWE() {
     }
   }, [isConnected, session]);
 
-  // Sign in with wallet
+  // Sign in with wallet (defined before the auto-sign effect that uses it)
   const signIn = useCallback(async () => {
     if (!address || !chainId) return;
     setSigning(true);
@@ -109,6 +96,18 @@ export function useSIWE() {
       setSigning(false);
     }
   }, [address, chainId, signMessageAsync]);
+
+  // Auto-sign-in: if wallet is connected but session is gone, trigger sign-in automatically
+  const autoSignAttempted = useRef(false);
+  useEffect(() => {
+    if (!loading && isConnected && address && !session && !signing && !autoSignAttempted.current) {
+      autoSignAttempted.current = true;
+      signIn();
+    }
+    if (!isConnected) {
+      autoSignAttempted.current = false;
+    }
+  }, [loading, isConnected, address, session, signing, signIn]);
 
   // Sign out
   const signOut = useCallback(async () => {
