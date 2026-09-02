@@ -40,11 +40,34 @@ export class TracerAgent {
     if (existingAnalysis.length > 0) {
     }
 
+    // Determine where to start tracing:
+    // If tx.to IS the victim, the incident tx sent funds TO the victim — the real
+    // drain happens via outgoing txs FROM the victim (internal txs / contract calls).
+    // If tx.from IS the victim, the victim sent funds out — trace from tx.to (the thief).
+    // Otherwise, trace from tx.to as default.
+    let traceStartAddress: string;
+    let traceStartAmount: string;
+
+    const victimLower = victimWallet.toLowerCase();
+    if (tx.to.toLowerCase() === victimLower) {
+      // Incident tx goes TO victim — trace the victim's outgoing txs to find the drain
+      traceStartAddress = victimWallet;
+      traceStartAmount = tx.value;
+    } else if (tx.from.toLowerCase() === victimLower) {
+      // Victim sent funds — trace from the recipient (the thief)
+      traceStartAddress = tx.to;
+      traceStartAmount = tx.value;
+    } else {
+      // Neither — trace from tx.to
+      traceStartAddress = tx.to;
+      traceStartAmount = tx.value;
+    }
+
     // Trace the main branch
     const hops = await this.traceFromAddress(
       caseId,
-      tx.to,
-      tx.value,
+      traceStartAddress,
+      traceStartAmount,
       incidentTxHash,
       1,
       'main'
@@ -100,8 +123,9 @@ export class TracerAgent {
     // Check if this is a contract
     const isContractAddr = await chain.isContract(address);
 
-    // Get outgoing transactions from this address
-    const outgoingTxs = await chain.getOutgoingTransactions(address);
+    // Get ALL outgoing transactions (regular + internal/contract calls)
+    // Internal txs catch drains via contract interactions (e.g. phishing approvals)
+    const outgoingTxs = await chain.getAllOutgoingTransactions(address);
 
     if (outgoingTxs.length === 0) {
       // Dead end — funds sitting in this wallet

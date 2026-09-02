@@ -31,11 +31,9 @@ interface InternalTx {
 
 // Investigation agents trace on Base mainnet (real transactions)
 // Wallet connection / bounty payment stays on Base Sepolia (see src/lib/wagmi.ts)
-// NOTE: Use INVESTIGATION-specific env vars so a stale BASE_RPC_URL (Sepolia)
-// on Vercel doesn't silently break mainnet tracing.
 const BASE_RPC = process.env.BASE_MAINNET_RPC_URL || 'https://mainnet.base.org';
-const BASESCAN_API = process.env.BASE_MAINNET_BASESCAN_URL || 'https://api.basescan.org/api';
-const BASESCAN_KEY = process.env.BASESCAN_API_KEY || '';
+// Basescan V1 API is deprecated (June 2026) — use Blockscout (free, no key)
+const EXPLORER_API = process.env.BASE_EXPLORER_API_URL || 'https://base.blockscout.com/api';
 
 export class ChainReader {
   // Get transaction details
@@ -101,16 +99,16 @@ export class ChainReader {
   // Get all outgoing transactions from an address (via Basescan)
   async getOutgoingTransactions(address: string, startBlock = 0): Promise<Transaction[]> {
     try {
-      const url = new URL(BASESCAN_API);
+      const url = new URL(EXPLORER_API);
       url.searchParams.set('module', 'account');
       url.searchParams.set('action', 'txlist');
       url.searchParams.set('address', address);
       url.searchParams.set('startblock', String(startBlock));
       url.searchParams.set('endblock', '99999999');
       url.searchParams.set('sort', 'asc');
-      url.searchParams.set('apikey', BASESCAN_KEY);
 
-      console.log(`[ChainReader] Fetching outgoing txs for ${address} from ${BASESCAN_API}`);
+
+      console.log(`[ChainReader] Fetching outgoing txs for ${address} from ${EXPLORER_API}`);
       const response = await fetch(url.toString());
       const data = await response.json();
 
@@ -138,14 +136,14 @@ export class ChainReader {
     }
   }
 
-  // Get internal transactions (for tracking fund splits through contracts)
+  // Get internal transactions by tx hash (for tracking fund splits through contracts)
   async getInternalTransactions(txHash: string): Promise<InternalTx[]> {
     try {
-      const url = new URL(BASESCAN_API);
+      const url = new URL(EXPLORER_API);
       url.searchParams.set('module', 'account');
       url.searchParams.set('action', 'txlistinternal');
       url.searchParams.set('txhash', txHash);
-      url.searchParams.set('apikey', BASESCAN_KEY);
+
 
       const response = await fetch(url.toString());
       const data = await response.json();
@@ -153,7 +151,7 @@ export class ChainReader {
       if (data.status !== '1' || !data.result) return [];
 
       return data.result.map((tx: Record<string, string>) => ({
-        hash: tx.hash,
+        hash: tx.hash || txHash,
         from: tx.from,
         to: tx.to,
         value: this.weiToEth(tx.value),
@@ -162,6 +160,75 @@ export class ChainReader {
     } catch {
       return [];
     }
+  }
+
+  // Get internal transactions by address (drains via contract calls)
+  // Uses Blockscout V2 REST API — much faster than the V1 etherscan-compat endpoint
+  async getInternalTransactionsByAddress(address: string, _startBlock = 0): Promise<Transaction[]> {
+    try {
+      // Blockscout V2: /api/v2/addresses/{hash}/internal-transactions?filter=from
+      const baseUrl = EXPLORER_API.replace(/\/api$/, '');
+      const apiUrl = `${baseUrl}/api/v2/addresses/${address}/internal-transactions?filter=from`;
+
+      console.log(`[ChainReader] Fetching internal txs for ${address} via V2 API`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+      const response = await fetch(apiUrl, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      const data = await response.json();
+      const items = data.items || [];
+
+      console.log(`[ChainReader] Internal txs V2 response: ${items.length} items`);
+
+      return items
+        .filter((tx: Record<string, unknown>) => {
+          const from = tx.from as Record<string, string> | null;
+          return from?.hash?.toLowerCase() === address.toLowerCase();
+        })
+        .map((tx: Record<string, unknown>) => {
+          const from = tx.from as Record<string, string>;
+          const to = tx.to as Record<string, string>;
+          const val = String(tx.value || '0');
+          return {
+            hash: (tx.transaction_hash || '') as string,
+            from: from?.hash || '',
+            to: to?.hash || '',
+            value: this.weiToEth('0x' + BigInt(val).toString(16)),
+            timestamp: (tx.timestamp || new Date().toISOString()) as string,
+            blockNumber: (tx.block_number || 0) as number,
+            gasUsed: '0',
+            input: '0x',
+            isError: false,
+          };
+        });
+    } catch (err) {
+      console.error(`[ChainReader] getInternalTransactionsByAddress error:`, err);
+      return [];
+    }
+  }
+
+  // Get ALL outgoing transactions (regular + internal) — the full money trail
+  async getAllOutgoingTransactions(address: string, startBlock = 0): Promise<Transaction[]> {
+    const [regular, internal] = await Promise.all([
+      this.getOutgoingTransactions(address, startBlock),
+      this.getInternalTransactionsByAddress(address, startBlock),
+    ]);
+
+    // Merge and deduplicate by tx hash, sort by timestamp
+    const seen = new Set<string>();
+    const merged: Transaction[] = [];
+    for (const tx of [...regular, ...internal]) {
+      const key = `${tx.hash}-${tx.to}-${tx.value}`;
+      if (!seen.has(key) && parseFloat(tx.value) > 0) {
+        seen.add(key);
+        merged.push(tx);
+      }
+    }
+
+    merged.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    console.log(`[ChainReader] All outgoing from ${address}: ${regular.length} regular + ${internal.length} internal = ${merged.length} merged`);
+    return merged;
   }
 
   // Get wallet balance
@@ -240,14 +307,14 @@ export class ChainReader {
   // Check latest transaction timestamp for a wallet (for Monitor agent)
   async getLatestActivity(address: string): Promise<{ hasNewActivity: boolean; latestTx: Transaction | null }> {
     try {
-      const url = new URL(BASESCAN_API);
+      const url = new URL(EXPLORER_API);
       url.searchParams.set('module', 'account');
       url.searchParams.set('action', 'txlist');
       url.searchParams.set('address', address);
       url.searchParams.set('page', '1');
       url.searchParams.set('offset', '1');
       url.searchParams.set('sort', 'desc');
-      url.searchParams.set('apikey', BASESCAN_KEY);
+
 
       const response = await fetch(url.toString());
       const data = await response.json();
@@ -278,7 +345,11 @@ export class ChainReader {
 
   private weiToEth(weiHex: string): string {
     const wei = BigInt(weiHex || '0');
-    // Divide by 10^12 first (stays within safe integer range), then by 10^6
+    // For values under MAX_SAFE_INTEGER (~9000 ETH), direct conversion is precise
+    if (wei < BigInt('9007199254740991')) {
+      return (Number(wei) / 1e18).toFixed(18).replace(/0+$/, '').replace(/\.$/, '.0');
+    }
+    // For very large values, divide in two steps to avoid precision loss
     const eth = Number(wei / BigInt('1000000000000')) / 1e6;
     return eth.toFixed(6);
   }
