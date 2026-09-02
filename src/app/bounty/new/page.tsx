@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { parseEther, pad } from 'viem';
+import { baseSepolia } from 'wagmi/chains';
 import DashboardShell from '@/components/DashboardShell';
 import { getBountyContractConfig } from '@/chain/contracts';
 
@@ -48,6 +49,7 @@ export default function PostBounty() {
         try {
           const hash = await writeContractAsync({
             ...contract,
+            chainId: baseSepolia.id,
             functionName: 'postBounty',
             args: [
               victimWallet as `0x${string}`,
