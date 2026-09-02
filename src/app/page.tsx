@@ -18,7 +18,7 @@ const SWARM = [
 ];
 
 const FOOTER_NAV = [
-  { heading: 'Product', links: [{ label: 'Bounty', href: '/bounty/new' }, { label: 'Case', href: '/case/001' }, { label: 'Dashboard', href: '/dashboard' }] },
+  { heading: 'Product', links: [{ label: 'Investigate', href: '/bounty/new' }, { label: 'Case', href: '/case/001' }, { label: 'Dashboard', href: '/dashboard' }] },
   { heading: 'Intelligence', links: [{ label: 'Patterns', href: '/patterns' }, { label: 'Memory', href: '/memory' }] },
 ];
 
@@ -254,7 +254,7 @@ export default function Home() {
               letterSpacing: '0.16em', textTransform: 'uppercase',
               cursor: 'pointer', textDecoration: 'none',
             }}>
-              Post a bounty
+              Start investigation
             </Link>
             <button aria-label="Menu" style={{
               width: 38, height: 38, display: 'grid', placeContent: 'center', gap: 5,
@@ -297,7 +297,7 @@ export default function Home() {
             lineHeight: 0.98, letterSpacing: '-0.02em', color: 'rgba(243,242,242,0.86)',
           }}>
             <span style={{ display: 'block', overflow: 'hidden', paddingBottom: '0.14em' }}>
-              <span style={{ display: 'block', animation: '0.9s cubic-bezier(0.16,1,0.3,1) 2.45s 1 normal both running pw-rise' }}>Post a bounty,</span>
+              <span style={{ display: 'block', animation: '0.9s cubic-bezier(0.16,1,0.3,1) 2.45s 1 normal both running pw-rise' }}>Submit a case,</span>
             </span>
             <span style={{ display: 'block', overflow: 'hidden', paddingBottom: '0.14em' }}>
               <span style={{ display: 'block', animation: '0.9s cubic-bezier(0.16,1,0.3,1) 2.56s 1 normal both running pw-rise' }}>wake the swarm.</span>
@@ -463,7 +463,7 @@ export default function Home() {
             fontSize: 14, color: 'var(--color-neutral-700)', maxWidth: '48ch',
             marginTop: 'var(--space-4)', textAlign: 'justify', hyphens: 'auto',
           }}>
-            Every bounty opens a live dossier at <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12.5px' }}>/case/[id]</span> — the traced path, the flagged wallets, the pattern matches and each agent&apos;s reasoning as it lands.
+            Every case opens a live dossier at <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12.5px' }}>/case/[id]</span> — the traced path, the flagged wallets, the pattern matches and each agent&apos;s reasoning as it lands.
           </p>
         </Reveal>
       </section>
@@ -543,7 +543,7 @@ export default function Home() {
             fontFamily: 'var(--font-mono)', textDecoration: 'none',
             transition: 'transform 0.3s, background 0.3s',
           }}>
-            Post a bounty →
+            Start investigation →
           </Link>
         </Reveal>
 

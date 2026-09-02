@@ -188,10 +188,10 @@ export default function Dashboard() {
             background: 'var(--color-accent-100)', padding: 'var(--space-4)',
           }}>
             <div style={{ fontFamily: 'var(--font-heading)', fontSize: 20, lineHeight: 1.15, maxWidth: '12ch' }}>
-              <span style={{ color: 'var(--color-accent-700)' }}>Escrow</span> is armed
+              <span style={{ color: 'var(--color-accent-700)' }}>Swarm</span> is ready
             </div>
             <p style={{ fontSize: '11.5px', color: 'var(--color-neutral-700)', margin: '8px 0 0', maxWidth: '22ch' }}>
-              Lock USDC and the swarm opens a case in seconds.
+              Lock ETH and the agents start tracing in seconds.
             </p>
             <svg width="128" height="104" viewBox="0 0 128 104" fill="none" style={{ position: 'absolute', right: -6, top: 4 }}>
               <path d="M14 96a50 50 0 0 1 100 0" stroke="var(--color-accent-300)" strokeWidth="7" strokeLinecap="round" />
@@ -205,7 +205,7 @@ export default function Dashboard() {
               fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase',
               fontFamily: 'var(--font-mono)', textDecoration: 'none',
               color: 'var(--color-text)', border: '1px solid var(--color-divider)',
-            }}>Post</Link>
+            }}>New</Link>
           </div>
         </div>
 
@@ -227,7 +227,7 @@ export default function Dashboard() {
                   color: 'var(--color-neutral-600)', fontFamily: 'var(--font-mono)', fontSize: 12,
                   textAlign: 'center', padding: 20,
                 }}>
-                  No activity yet.<br />Post a bounty to start your first investigation.
+                  No activity yet.<br />Start an investigation to see agent activity here.
                 </div>
               ) : (
                 <>

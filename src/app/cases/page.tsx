@@ -62,7 +62,7 @@ export default function Cases() {
           fontFamily: 'var(--font-mono)', fontSize: '10.5px',
           letterSpacing: '0.1em', textTransform: 'uppercase',
           textDecoration: 'none',
-        }}>+ New case</Link>
+        }}>+ New investigation</Link>
       </div>
 
       <div style={{ marginTop: 'var(--space-6)', overflowX: 'auto' }}>
@@ -95,7 +95,7 @@ export default function Cases() {
           }}>
             <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22, marginBottom: 8 }}>No cases yet</div>
             <p style={{ fontSize: 13, color: 'var(--color-neutral-600)', maxWidth: '36ch', margin: '0 auto' }}>
-              Post a bounty to start your first investigation.
+              Start an investigation to open your first case.
             </p>
           </div>
         ) : (

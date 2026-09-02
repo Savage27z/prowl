@@ -104,10 +104,10 @@ export default function PostBounty() {
     <DashboardShell>
       <div style={{ maxWidth: 560 }}>
         <h1 style={{ fontSize: 'clamp(34px, 3.4vw, 46px)', fontWeight: 400, letterSpacing: '-0.02em', margin: 0, fontFamily: 'var(--font-heading)' }}>
-          Post a bounty
+          Start an investigation
         </h1>
         <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', marginTop: 8, marginBottom: 'var(--space-8, 37px)' }}>
-          Submit details about stolen funds. Prowl&apos;s AI agents will trace the money trail.
+          Submit details about stolen funds. Prowl&apos;s AI agents will trace the money trail automatically.
         </p>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
@@ -134,11 +134,11 @@ export default function PostBounty() {
 
           <div>
             <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '9.5px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--color-neutral-600)', marginBottom: 6 }}>
-              Reward (ETH)
+              Investigation fee (ETH)
             </label>
             <input type="number" step="0.001" min="0" value={reward} onChange={(e) => setReward(e.target.value)} placeholder="0.1" style={inputStyle} />
             <p style={{ fontSize: 11, color: 'var(--color-neutral-600)', marginTop: 4 }}>
-              Reward will be locked in the smart contract on Base
+              Locked in escrow on Base — refunded if the case is unsolved
             </p>
           </div>
 
@@ -159,7 +159,7 @@ export default function PostBounty() {
             {step === 'onchain' ? 'Confirm in wallet…' :
              step === 'api' ? 'Starting investigation…' :
              waitingForTx ? 'Waiting for confirmation…' :
-             isConnected && reward ? 'Post bounty on-chain' : 'Post bounty & start investigation'}
+             isConnected && reward ? 'Lock fee & start investigation' : 'Start investigation'}
           </button>
 
           {txHash && (

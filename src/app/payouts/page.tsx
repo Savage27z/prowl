@@ -1,4 +1,4 @@
-// Payouts — bounty reward tracking and claim status
+// Payouts — investigation fee tracking and release status
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -75,7 +75,7 @@ export default function Payouts() {
         }}>
           <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22, marginBottom: 8 }}>No payouts yet</div>
           <p style={{ fontSize: 13, color: 'var(--color-neutral-600)', maxWidth: '36ch', margin: '0 auto' }}>
-            Payouts appear here when cases are solved and escrow is released.
+            Payouts appear here when investigations are complete and escrow is released.
           </p>
         </div>
       ) : (
