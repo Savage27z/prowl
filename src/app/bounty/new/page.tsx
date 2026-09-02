@@ -4,7 +4,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useSwitchChain } from 'wagmi';
 import { parseEther, pad } from 'viem';
 import { baseSepolia } from 'wagmi/chains';
 import DashboardShell from '@/components/DashboardShell';
@@ -12,7 +12,8 @@ import { getBountyContractConfig } from '@/chain/contracts';
 
 export default function PostBounty() {
   const router = useRouter();
-  const { isConnected } = useAccount();
+  const { isConnected, chainId } = useAccount();
+  const { switchChainAsync } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
   const [victimWallet, setVictimWallet] = useState('');
   const [incidentTx, setIncidentTx] = useState('');
@@ -47,6 +48,10 @@ export default function PostBounty() {
       if (isConnected && contract.address && rewardEth > 0) {
         setStep('onchain');
         try {
+          // Switch to Base Sepolia if wallet is on the wrong chain
+          if (chainId !== baseSepolia.id) {
+            await switchChainAsync({ chainId: baseSepolia.id });
+          }
           const hash = await writeContractAsync({
             ...contract,
             chainId: baseSepolia.id,
