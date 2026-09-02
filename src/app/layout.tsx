@@ -29,6 +29,21 @@ const lora = Lora({
 export const metadata: Metadata = {
   title: "Prowl — AI Crypto Investigation Swarm",
   description: "Coordinated AI agents that trace stolen crypto on Base. Powered by Sibyl Memory.",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icon.svg",
+  },
+  openGraph: {
+    title: "Prowl",
+    description: "AI agents that trace stolen crypto on Base in real time.",
+    siteName: "Prowl",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Prowl",
+    description: "AI agents that trace stolen crypto on Base in real time.",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

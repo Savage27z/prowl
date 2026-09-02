@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0a0a0a"/>
+  <!-- Outer ring — scope/target -->
+  <circle cx="256" cy="256" r="160" fill="none" stroke="#c8a87c" stroke-width="24"/>
+  <!-- Inner iris -->
+  <circle cx="256" cy="256" r="80" fill="none" stroke="#c8a87c" stroke-width="16"/>
+  <!-- Pupil -->
+  <circle cx="256" cy="256" r="32" fill="#c8a87c"/>
+  <!-- Crosshair ticks -->
+  <line x1="256" y1="56" x2="256" y2="112" stroke="#c8a87c" stroke-width="16" stroke-linecap="round"/>
+  <line x1="256" y1="400" x2="256" y2="456" stroke="#c8a87c" stroke-width="16" stroke-linecap="round"/>
+  <line x1="56" y1="256" x2="112" y2="256" stroke="#c8a87c" stroke-width="16" stroke-linecap="round"/>
+  <line x1="400" y1="256" x2="456" y2="256" stroke="#c8a87c" stroke-width="16" stroke-linecap="round"/>
+</svg>
