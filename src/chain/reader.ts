@@ -31,8 +31,10 @@ interface InternalTx {
 
 // Investigation agents trace on Base mainnet (real transactions)
 // Wallet connection / bounty payment stays on Base Sepolia (see src/lib/wagmi.ts)
-const BASE_RPC = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
-const BASESCAN_API = process.env.BASESCAN_API_URL || 'https://api.basescan.org/api';
+// NOTE: Use INVESTIGATION-specific env vars so a stale BASE_RPC_URL (Sepolia)
+// on Vercel doesn't silently break mainnet tracing.
+const BASE_RPC = process.env.BASE_MAINNET_RPC_URL || 'https://mainnet.base.org';
+const BASESCAN_API = process.env.BASE_MAINNET_BASESCAN_URL || 'https://api.basescan.org/api';
 const BASESCAN_KEY = process.env.BASESCAN_API_KEY || '';
 
 export class ChainReader {
