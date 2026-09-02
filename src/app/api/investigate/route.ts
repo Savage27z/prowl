@@ -3,7 +3,6 @@
 // GET  /api/investigate — List cases + stats
 
 import { NextRequest, NextResponse } from 'next/server';
-import { after } from 'next/server';
 import { getSharedCoordinator } from '@/agents/shared';
 import { getCaseEvents } from '@/agents/coordinator';
 import { isValidAddress, isValidTxHash } from '@/chain/utils';
@@ -80,19 +79,15 @@ export async function POST(req: NextRequest) {
       description,
     );
 
+    // Run the investigation pipeline synchronously so results are available
+    // immediately — serverless Lambdas don't share in-memory state, so
+    // after() would store events on a Lambda the client never polls
+    await coordinator.runInvestigation(caseId);
+
     const caseData = await coordinator.getCase(caseId);
+    const events = getCaseEvents(caseId);
 
-    // Run the investigation pipeline in the background after the response is sent
-    // This lets the client connect to SSE first and watch events stream in
-    after(async () => {
-      try {
-        await coordinator.runInvestigation(caseId);
-      } catch {
-        // Pipeline error — case stays in 'active' status
-      }
-    });
-
-    return NextResponse.json({ success: true, caseId, case: caseData });
+    return NextResponse.json({ success: true, caseId, case: caseData, events });
   } catch (error) {
     console.error('[API] Investigation error:', error);
     return NextResponse.json(

@@ -91,9 +91,11 @@ export default function PostBounty() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to start investigation');
       setStep('done');
-      // Cache case data so it survives serverless cold starts
+      // Cache all results (case + events) so the case page can read them
+      // immediately — serverless Lambdas don't share in-memory state
       try {
         if (data.case) localStorage.setItem(`prowl-case-${data.caseId}`, JSON.stringify(data.case));
+        if (data.events) localStorage.setItem(`prowl-feed-${data.caseId}`, JSON.stringify(data.events));
         const existing = localStorage.getItem('prowl-cases');
         const list = existing ? JSON.parse(existing) : [];
         if (data.case) list.unshift(data.case);
@@ -172,7 +174,7 @@ export default function PostBounty() {
             opacity: (submitting || !victimWallet || !incidentTx) ? 0.5 : 1,
           }}>
             {step === 'onchain' ? 'Confirm in wallet…' :
-             step === 'api' ? 'Starting investigation…' :
+             step === 'api' ? 'Agents investigating… (~15s)' :
              waitingForTx ? 'Waiting for confirmation…' :
              isConnected && reward ? 'Lock fee & start investigation' : 'Start investigation'}
           </button>

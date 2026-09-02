@@ -172,52 +172,59 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
   const [pipelineDone, setPipelineDone] = useState(false);
   const feedRef = useRef<HTMLDivElement>(null);
 
+  // Load data — try server first, fall back to localStorage
   const fetchData = useCallback(async () => {
+    // 1. Try to load case + events from server
+    let serverCase: CaseData | null = null;
+    let serverEvents: FeedEvent[] = [];
     try {
       const res = await fetch(`/api/investigate?caseId=${id}`);
       if (res.ok) {
         const data = await res.json();
-        setCaseData(data.case);
-        // Update feed from server-side event log
-        if (data.events && data.events.length > 0) {
-          setFeed(data.events.map((e: { agent: string; action: string; data: Record<string, unknown>; timestamp: string }) => ({
+        serverCase = data.case;
+        if (data.events?.length) {
+          serverEvents = data.events.map((e: { agent: string; action: string; data: Record<string, unknown>; timestamp: string }) => ({
             id: `${e.agent}-${e.action}-${e.timestamp}`,
-            agent: e.agent,
-            action: e.action,
-            data: e.data || {},
-            timestamp: e.timestamp,
-          })).reverse());
+            agent: e.agent, action: e.action, data: e.data || {}, timestamp: e.timestamp,
+          }));
           try { localStorage.setItem(`prowl-feed-${id}`, JSON.stringify(data.events)); } catch { /* */ }
         }
-        // Check if pipeline is done (status moved past 'active')
-        if (data.case?.status && data.case.status !== 'active') {
-          setPipelineDone(true);
+        if (data.case) {
+          try { localStorage.setItem(`prowl-case-${id}`, JSON.stringify(data.case)); } catch { /* */ }
         }
-        // Cache in localStorage so the case survives serverless cold starts
-        try { localStorage.setItem(`prowl-case-${id}`, JSON.stringify(data.case)); } catch { /* */ }
-      } else {
-        // Server lost the data (cold start) — try localStorage cache
-        try {
-          const cached = localStorage.getItem(`prowl-case-${id}`);
-          if (cached) setCaseData(JSON.parse(cached));
-          const cachedFeed = localStorage.getItem(`prowl-feed-${id}`);
-          if (cachedFeed) {
-            const events = JSON.parse(cachedFeed);
-            setFeed(events.map((e: { agent: string; action: string; data: Record<string, unknown>; timestamp: string }) => ({
-              id: `${e.agent}-${e.action}-${e.timestamp}`,
-              agent: e.agent, action: e.action, data: e.data || {}, timestamp: e.timestamp,
-            })).reverse());
-          }
-          setPipelineDone(true);
-        } catch { /* */ }
       }
+    } catch { /* server unreachable */ }
+
+    // 2. Fall back to localStorage
+    if (!serverCase) {
+      try {
+        const cached = localStorage.getItem(`prowl-case-${id}`);
+        if (cached) serverCase = JSON.parse(cached);
+      } catch { /* */ }
+    }
+    if (serverEvents.length === 0) {
+      try {
+        const cached = localStorage.getItem(`prowl-feed-${id}`);
+        if (cached) {
+          const raw = JSON.parse(cached);
+          serverEvents = raw.map((e: { agent: string; action: string; data: Record<string, unknown>; timestamp: string }) => ({
+            id: `${e.agent}-${e.action}-${e.timestamp}`,
+            agent: e.agent, action: e.action, data: e.data || {}, timestamp: e.timestamp,
+          }));
+        }
+      } catch { /* */ }
+    }
+
+    if (serverCase) setCaseData(serverCase);
+    if (serverCase?.status && serverCase.status !== 'active') setPipelineDone(true);
+
+    // 3. Load hops + analyses
+    try {
       const memRes = await fetch('/api/memory');
       if (memRes.ok) {
         const memData = await memRes.json();
-        const allHops = memData.collections?.HOPS || [];
-        const allAnalyses = memData.collections?.ANALYSIS || [];
-        const caseHops = allHops.filter((h: HopData) => h.case_id === id);
-        const caseAnalyses = allAnalyses.filter((a: AnalysisData) => a.case_id === id);
+        const caseHops = (memData.collections?.HOPS || []).filter((h: HopData) => h.case_id === id);
+        const caseAnalyses = (memData.collections?.ANALYSIS || []).filter((a: AnalysisData) => a.case_id === id);
         setHops(caseHops);
         setAnalyses(caseAnalyses);
         try {
@@ -225,39 +232,41 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
           localStorage.setItem(`prowl-analysis-${id}`, JSON.stringify(caseAnalyses));
         } catch { /* */ }
       } else {
-        try {
-          const cachedHops = localStorage.getItem(`prowl-hops-${id}`);
-          const cachedAnalyses = localStorage.getItem(`prowl-analysis-${id}`);
-          if (cachedHops) setHops(JSON.parse(cachedHops));
-          if (cachedAnalyses) setAnalyses(JSON.parse(cachedAnalyses));
-        } catch { /* */ }
+        const cachedHops = localStorage.getItem(`prowl-hops-${id}`);
+        const cachedAnalyses = localStorage.getItem(`prowl-analysis-${id}`);
+        if (cachedHops) setHops(JSON.parse(cachedHops));
+        if (cachedAnalyses) setAnalyses(JSON.parse(cachedAnalyses));
       }
     } catch {
-      // Network error — try localStorage cache
       try {
-        const cached = localStorage.getItem(`prowl-case-${id}`);
-        if (cached) setCaseData(JSON.parse(cached));
         const cachedHops = localStorage.getItem(`prowl-hops-${id}`);
         const cachedAnalyses = localStorage.getItem(`prowl-analysis-${id}`);
         if (cachedHops) setHops(JSON.parse(cachedHops));
         if (cachedAnalyses) setAnalyses(JSON.parse(cachedAnalyses));
       } catch { /* */ }
-    } finally {
-      setLoading(false);
     }
-  }, [id]);
+
+    // 4. Animate events into the feed one by one for a "live" effect
+    if (serverEvents.length > 0 && feed.length === 0) {
+      // Reveal events sequentially with delays
+      const reversed = [...serverEvents].reverse();
+      for (let i = 0; i < reversed.length; i++) {
+        setTimeout(() => {
+          setFeed(prev => {
+            // Avoid duplicates
+            if (prev.some(f => f.id === reversed[i].id)) return prev;
+            return [reversed[i], ...prev];
+          });
+        }, i * 1200); // 1.2s between each event
+      }
+      setPipelineDone(true);
+    }
+
+    setLoading(false);
+  }, [id, feed.length]);
 
   // Initial fetch
   useEffect(() => { fetchData(); }, [fetchData]);
-
-  // Poll for updates while the pipeline is running
-  useEffect(() => {
-    if (pipelineDone) return;
-    const interval = setInterval(() => {
-      fetchData();
-    }, 2500);
-    return () => clearInterval(interval);
-  }, [pipelineDone, fetchData]);
 
   // Auto-scroll feed
   useEffect(() => {

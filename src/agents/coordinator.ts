@@ -94,19 +94,12 @@ export class Coordinator {
     await this.runPipeline(caseId, caseData.incident_tx, caseData.victim_wallet);
   }
 
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
   // The main investigation pipeline
   private async runPipeline(
     caseId: string,
     incidentTx: string,
     victimWallet: string
   ): Promise<void> {
-    // Small initial delay so the client has time to connect to SSE
-    await this.delay(1500);
-
     // Step 1: Tracer traces the funds
     this.emit({
       caseId,
@@ -115,7 +108,6 @@ export class Coordinator {
       data: { incidentTx, victimWallet },
     });
 
-    await this.delay(800);
     const traceResult = await this.tracer.startTrace(caseId, incidentTx, victimWallet);
 
     this.emit({
@@ -129,8 +121,6 @@ export class Coordinator {
       },
     });
 
-    await this.delay(1200);
-
     // Step 2: Analyst analyzes the findings
     this.emit({
       caseId,
@@ -139,7 +129,6 @@ export class Coordinator {
       data: { hopsToAnalyze: traceResult.hops.length },
     });
 
-    await this.delay(600);
     const analysisResult = await this.analyst.analyzeCase(caseId);
 
     this.emit({
@@ -154,8 +143,6 @@ export class Coordinator {
       },
     });
 
-    await this.delay(1000);
-
     // Step 3: If there are dead ends, Monitor starts watching
     if (traceResult.status === 'dead_end') {
       this.emit({
@@ -165,7 +152,6 @@ export class Coordinator {
         data: {},
       });
 
-      await this.delay(600);
       const monitorResult = await this.monitor.scanForDeadEnds(caseId);
 
       this.emit({
@@ -193,7 +179,6 @@ export class Coordinator {
         agents_involved: ['tracer', 'analyst'],
       });
 
-      await this.delay(500);
       this.emit({
         caseId,
         agent: 'coordinator',
