@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect, useCallback } from 'react';
 import { useSIWE } from '@/hooks/useSIWE';
 
 function SearchIcon() {
@@ -13,6 +13,60 @@ function SearchIcon() {
       <path d="M16.5 16.5 21 21" />
     </svg>
   );
+}
+
+function SunIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <circle cx="12" cy="12" r="5" />
+      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  );
+}
+
+type Theme = 'light' | 'dark' | 'system';
+
+function useTheme() {
+  const [theme, setThemeState] = useState<Theme>('system');
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('pw-theme') as Theme | null;
+      if (saved && ['light', 'dark', 'system'].includes(saved)) {
+        setThemeState(saved);
+        applyTheme(saved);
+      }
+    } catch { /* localStorage unavailable */ }
+  }, []);
+
+  const setTheme = useCallback((t: Theme) => {
+    setThemeState(t);
+    applyTheme(t);
+    try { localStorage.setItem('pw-theme', t); } catch { /* */ }
+  }, []);
+
+  const cycle = useCallback(() => {
+    setTheme(theme === 'system' ? 'light' : theme === 'light' ? 'dark' : 'system');
+  }, [theme, setTheme]);
+
+  return { theme, cycle };
+}
+
+function applyTheme(t: Theme) {
+  const root = document.documentElement;
+  if (t === 'system') {
+    root.removeAttribute('data-theme');
+  } else {
+    root.setAttribute('data-theme', t);
+  }
 }
 
 const NAV_ITEMS: { label: string; href: string; badge?: string }[] = [
@@ -33,6 +87,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { session, signOut } = useSIWE();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const { theme, cycle: cycleTheme } = useTheme();
 
   return (
     <div style={{
@@ -87,11 +142,19 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
-          <button onClick={signOut} type="button" style={{
+          <button onClick={cycleTheme} type="button" style={{
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '10px 12px', fontSize: '12.5px', color: 'var(--color-neutral-700)',
             cursor: 'pointer', background: 'none', border: 'none', font: 'inherit',
             borderTop: '1px solid var(--color-divider)', marginTop: 4, paddingTop: 14,
+          }}>
+            {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
+            {theme === 'light' ? 'Light mode' : theme === 'dark' ? 'Dark mode' : 'System theme'}
+          </button>
+          <button onClick={signOut} type="button" style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '10px 12px', fontSize: '12.5px', color: 'var(--color-neutral-700)',
+            cursor: 'pointer', background: 'none', border: 'none', font: 'inherit',
           }}>
             Sign out
           </button>
@@ -164,12 +227,29 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
             })}
           </nav>
 
+          {/* Theme toggle */}
+          <button
+            onClick={cycleTheme}
+            type="button"
+            aria-label={`Theme: ${theme}`}
+            style={{
+              marginTop: 'auto',
+              display: 'flex', alignItems: 'center', gap: 9,
+              fontSize: '12.5px', color: 'var(--color-neutral-700)',
+              cursor: 'pointer', background: 'none', border: 'none',
+              font: 'inherit', width: '100%', padding: '0',
+              paddingBlockEnd: 'var(--space-4)',
+            }}
+          >
+            {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
+            {theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'System'}
+          </button>
+
           {/* Sign out */}
           <button
             onClick={signOut}
             type="button"
             style={{
-              marginTop: 'auto',
               borderTop: '1px solid var(--color-divider)',
               display: 'flex', alignItems: 'center', gap: 9,
               fontSize: '12.5px', color: 'var(--color-neutral-700)',
