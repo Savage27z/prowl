@@ -58,7 +58,6 @@ const localMemory = {
   async store(collection: CollectionName, document: Record<string, unknown>, id?: string): Promise<string> {
     const docId = id || genId();
     col(collection).set(docId, { id: docId, data: { ...document }, ts: new Date().toISOString() });
-    console.log(`[Memory] stored  ${collection}/${docId}`);
     return docId;
   },
 
@@ -99,7 +98,6 @@ const localMemory = {
       doc.data = { ...doc.data, ...updates };
       doc.ts = new Date().toISOString();
     }
-    console.log(`[Memory] updated ${collection}/${id}`);
   },
 
   async delete(collection: CollectionName, id: string): Promise<void> {
@@ -108,12 +106,10 @@ const localMemory = {
 
   async clearCollection(collection: CollectionName): Promise<void> {
     _store.set(collection, new Map());
-    console.log(`[Memory] cleared ${collection}`);
   },
 
   async clearAll(): Promise<void> {
     for (const name of Object.values(COLLECTIONS)) _store.set(name, new Map());
-    console.log('[Memory] ALL CLEARED — agents cannot coordinate');
   },
 
   async search<T>(query: string, collections?: CollectionName[]): Promise<T[]> {
@@ -161,7 +157,6 @@ const bridgeMemory = {
     });
     // Also write to local cache so query/dump work immediately
     localMemory.store(collection, document, docId);
-    console.log(`[Sibyl] stored  ${collection}/${docId}`);
     return docId;
   },
 
@@ -190,7 +185,6 @@ const bridgeMemory = {
       body: { category: collection, name: id, data: merged },
     });
     localMemory.update(collection, id, updates);
-    console.log(`[Sibyl] updated ${collection}/${id}`);
   },
 
   async delete(collection: CollectionName, id: string): Promise<void> {
@@ -201,13 +195,11 @@ const bridgeMemory = {
   async clearCollection(collection: CollectionName): Promise<void> {
     await bridgeFetch(`/clear?categories=${collection}`, { method: 'DELETE' });
     localMemory.clearCollection(collection);
-    console.log(`[Sibyl] cleared ${collection}`);
   },
 
   async clearAll(): Promise<void> {
     await bridgeFetch('/clear', { method: 'DELETE' });
     localMemory.clearAll();
-    console.log('[Sibyl] ALL CLEARED — agents cannot coordinate');
   },
 
   async search<T>(query: string, collections?: CollectionName[]): Promise<T[]> {
@@ -244,7 +236,6 @@ export type MemoryAPI = typeof localMemory;
 
 export function getSibylMemory(): MemoryAPI {
   if (BRIDGE_URL) {
-    console.log(`[Memory] Using Sibyl bridge at ${BRIDGE_URL}`);
     return bridgeMemory;
   }
   return localMemory;

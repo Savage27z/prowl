@@ -39,14 +39,12 @@ export async function callAI(
 
     if (!response.ok) {
       const error = await response.text();
-      console.error(`[AI] OpenRouter error: ${response.status} — ${error}`);
       return `AI analysis unavailable (${response.status})`;
     }
 
     const data = await response.json();
     return data.choices?.[0]?.message?.content || 'No analysis generated.';
-  } catch (error) {
-    console.error('[AI] Error calling OpenRouter:', error);
+  } catch {
     return 'AI analysis unavailable — connection error.';
   }
 }

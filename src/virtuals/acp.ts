@@ -102,7 +102,6 @@ async function getACPAgent(config?: ProwlACPConfig) {
   _initialized = true;
   _available = true;
 
-  console.log('[Virtuals] ACP agent initialized');
   return _agent;
 }
 
@@ -123,7 +122,6 @@ export async function createJob(
 ): Promise<number> {
   const agent = await getACPAgent();
   const jobId = await agent.createJobByOfferingName(providerWallet, offeringName, description);
-  console.log(`[Virtuals] Created job ${jobId} for offering "${offeringName}"`);
   return jobId;
 }
 
@@ -148,7 +146,7 @@ export async function handleIncomingJobs(
         clientWallet: job.clientWallet || '',
       });
     } catch (err) {
-      console.error(`[Virtuals] Error handling job ${job.id}:`, err);
+      void err; // swallow — caller handles retries
     }
   }
 }
@@ -156,19 +154,16 @@ export async function handleIncomingJobs(
 export async function acceptJob(jobId: number): Promise<void> {
   const agent = await getACPAgent();
   await agent.respondToJob(jobId, true);
-  console.log(`[Virtuals] Accepted job ${jobId}`);
 }
 
 export async function deliverJob(jobId: number, result: JobResult): Promise<void> {
   const agent = await getACPAgent();
   await agent.deliverJob(jobId, JSON.stringify(result));
-  console.log(`[Virtuals] Delivered results for job ${jobId}`);
 }
 
 export async function rejectJob(jobId: number, reason?: string): Promise<void> {
   const agent = await getACPAgent();
   await agent.respondToJob(jobId, false, reason || 'Not able to handle this request');
-  console.log(`[Virtuals] Rejected job ${jobId}: ${reason}`);
 }
 
 // ─── Integration with Coordinator ───────────────────────────────

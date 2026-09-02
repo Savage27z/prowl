@@ -23,8 +23,6 @@ export class AnalystAgent {
 
   // Analyze all hops for a case
   async analyzeCase(caseId: string): Promise<AnalysisResult> {
-    console.log(`[Analyst] Starting analysis for case ${caseId}`);
-
     // Read Tracer's hop data from Sibyl Memory (L55 — referenced in README)
     const hops = await this.memory.query<Hop>(COLLECTIONS.HOPS, {
       filter: { case_id: caseId },
@@ -32,7 +30,6 @@ export class AnalystAgent {
     });
 
     if (hops.length === 0) {
-      console.log(`[Analyst] No hops found for case ${caseId} — Tracer hasn't written yet`);
       return {
         analyses: [],
         newPatterns: [],
@@ -41,12 +38,8 @@ export class AnalystAgent {
       };
     }
 
-    console.log(`[Analyst] Found ${hops.length} hops to analyze`);
-
     // Load existing patterns from memory
     const knownPatterns = await this.memory.query<Pattern>(COLLECTIONS.PATTERNS, {});
-    console.log(`[Analyst] Loaded ${knownPatterns.length} known patterns from memory`);
-
     // Load past analyses for cross-case correlation
     const pastAnalyses = await this.memory.query<Analysis>(COLLECTIONS.ANALYSIS, {});
 
@@ -84,7 +77,6 @@ export class AnalystAgent {
         pattern as unknown as Record<string, unknown>,
         pattern.pattern_id
       );
-      console.log(`[Analyst] New pattern stored: ${pattern.pattern_id} — ${pattern.description}`);
     }
 
     // Calculate overall risk
@@ -92,8 +84,6 @@ export class AnalystAgent {
 
     // Generate AI summary
     const summary = await this.generateAnalysisSummary(caseId, hops, analyses, newPatterns);
-
-    console.log(`[Analyst] Analysis complete for case ${caseId}: ${analyses.length} analyses, ${newPatterns.length} new patterns, risk: ${overallRisk}`);
 
     return { analyses, newPatterns, overallRisk, summary };
   }

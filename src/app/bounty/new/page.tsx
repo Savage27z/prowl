@@ -1,18 +1,30 @@
 // New Bounty — form to submit investigation requests
+// Posts bounty on-chain via ProwlBounty contract, then starts the investigation API
 'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { parseEther, pad } from 'viem';
 import DashboardShell from '@/components/DashboardShell';
+import { getBountyContractConfig } from '@/chain/contracts';
 
 export default function PostBounty() {
   const router = useRouter();
+  const { isConnected } = useAccount();
+  const { writeContractAsync } = useWriteContract();
   const [victimWallet, setVictimWallet] = useState('');
   const [incidentTx, setIncidentTx] = useState('');
   const [description, setDescription] = useState('');
   const [reward, setReward] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [txHash, setTxHash] = useState<`0x${string}` | undefined>();
   const [error, setError] = useState('');
+  const [step, setStep] = useState<'idle' | 'onchain' | 'api' | 'done'>('idle');
+
+  const { isLoading: waitingForTx } = useWaitForTransactionReceipt({
+    hash: txHash,
+  });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,20 +39,55 @@ export default function PostBounty() {
         throw new Error('Invalid transaction hash format');
       }
 
+      const rewardEth = reward ? parseFloat(reward) : 0;
+      const contract = getBountyContractConfig();
+
+      // Step 1: Post bounty on-chain (if wallet connected and reward > 0)
+      if (isConnected && contract.address && rewardEth > 0) {
+        setStep('onchain');
+        try {
+          const hash = await writeContractAsync({
+            ...contract,
+            functionName: 'postBounty',
+            args: [
+              victimWallet as `0x${string}`,
+              pad(incidentTx as `0x${string}`, { size: 32 }),
+              description || 'Prowl investigation',
+            ],
+            value: parseEther(reward || '0'),
+          });
+          setTxHash(hash);
+        } catch (txErr) {
+          // User rejected or wallet error — still allow API-only path
+          const msg = txErr instanceof Error ? txErr.message : '';
+          if (msg.includes('User rejected') || msg.includes('denied')) {
+            setStep('api');
+            // fall through to API-only
+          } else {
+            throw new Error(`On-chain tx failed: ${msg.slice(0, 100)}`);
+          }
+        }
+      }
+
+      // Step 2: Start investigation via API
+      setStep('api');
       const res = await fetch('/api/investigate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           victimWallet, incidentTx, description,
           reward: reward ? `${reward} ETH` : '0 ETH',
+          txHash: txHash || undefined,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to start investigation');
+      setStep('done');
       router.push(`/case/${data.caseId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
+      setStep('idle');
     } finally {
       setSubmitting(false);
     }
@@ -109,8 +156,17 @@ export default function PostBounty() {
             border: 'none', cursor: 'pointer',
             opacity: (submitting || !victimWallet || !incidentTx) ? 0.5 : 1,
           }}>
-            {submitting ? 'Starting investigation…' : 'Post bounty & start investigation'}
+            {step === 'onchain' ? 'Confirm in wallet…' :
+             step === 'api' ? 'Starting investigation…' :
+             waitingForTx ? 'Waiting for confirmation…' :
+             isConnected && reward ? 'Post bounty on-chain' : 'Post bounty & start investigation'}
           </button>
+
+          {txHash && (
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--color-status-solved)' }}>
+              ✓ On-chain TX: <a href={`https://sepolia.basescan.org/tx/${txHash}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-accent-700)', textDecoration: 'underline' }}>{txHash.slice(0, 10)}…{txHash.slice(-8)}</a>
+            </div>
+          )}
 
           {/* Info */}
           <div style={{ borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)', background: 'var(--color-neutral-100)', padding: 'var(--space-4)' }}>

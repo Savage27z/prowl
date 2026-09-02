@@ -24,9 +24,6 @@ export class TracerAgent {
 
   // Start tracing from an incident transaction
   async startTrace(caseId: string, incidentTxHash: string, victimWallet: string): Promise<TraceResult> {
-    console.log(`[Tracer] Starting trace for case ${caseId}`);
-    console.log(`[Tracer] Incident TX: ${incidentTxHash}`);
-    console.log(`[Tracer] Victim wallet: ${victimWallet}`);
 
     // Get the incident transaction
     const tx = await chain.getTransaction(incidentTxHash);
@@ -41,7 +38,6 @@ export class TracerAgent {
     // Check if Analyst has any tips for us from memory
     const existingAnalysis = await this.checkAnalystTips(caseId);
     if (existingAnalysis.length > 0) {
-      console.log(`[Tracer] Found ${existingAnalysis.length} analyst tips from memory`);
     }
 
     // Trace the main branch
@@ -75,7 +71,6 @@ export class TracerAgent {
     branchId: string
   ): Promise<Hop[]> {
     if (hopNumber > this.maxHops) {
-      console.log(`[Tracer] Max hops (${this.maxHops}) reached`);
       return [];
     }
 
@@ -84,7 +79,6 @@ export class TracerAgent {
     // Check if this is a known address (exchange, bridge, etc.)
     const known = isKnownAddress(address);
     if (known.known) {
-      console.log(`[Tracer] Known address found: ${known.label} (${address})`);
       const hop: Hop = {
         case_id: caseId,
         hop_number: hopNumber,
@@ -111,7 +105,6 @@ export class TracerAgent {
 
     if (outgoingTxs.length === 0) {
       // Dead end — funds sitting in this wallet
-      console.log(`[Tracer] Dead end at ${address} — no outgoing transactions`);
       const hop: Hop = {
         case_id: caseId,
         hop_number: hopNumber,
@@ -133,7 +126,6 @@ export class TracerAgent {
     // Check for fund splitting
     const isSplit = outgoingTxs.length > 1;
     if (isSplit) {
-      console.log(`[Tracer] Fund split detected: ${outgoingTxs.length} outgoing transactions`);
     }
 
     // Trace each branch (up to maxBranches)
@@ -178,7 +170,6 @@ export class TracerAgent {
 
   // Resume tracing from a Monitor alert
   async resumeTrace(caseId: string, address: string): Promise<TraceResult> {
-    console.log(`[Tracer] Resuming trace for case ${caseId} from ${address}`);
 
     // Get existing hops to determine hop number
     const existingHops = await this.memory.query<Hop>(COLLECTIONS.HOPS, {
@@ -211,7 +202,6 @@ export class TracerAgent {
   private async writeHop(hop: Hop): Promise<void> {
     const hopId = `${hop.case_id}-hop-${hop.hop_number}-${hop.branch_id}`;
     await this.memory.store(COLLECTIONS.HOPS, hop as unknown as Record<string, unknown>, hopId);
-    console.log(`[Tracer] Wrote hop ${hop.hop_number} to memory: ${hop.from_address} → ${hop.to_address} (${hop.amount} ETH)`);
   }
 
   // Read analyst tips from memory (L90 — referenced in README)

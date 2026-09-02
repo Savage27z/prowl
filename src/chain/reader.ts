@@ -65,8 +65,7 @@ export class ChainReader {
         input: tx.input,
         isError: receipt?.status === '0x0',
       };
-    } catch (error) {
-      console.error('[ChainReader] Error fetching tx:', error);
+    } catch {
       return null;
     }
   }
@@ -122,8 +121,7 @@ export class ChainReader {
           input: tx.input,
           isError: tx.isError === '1',
         }));
-    } catch (error) {
-      console.error('[ChainReader] Error fetching outgoing txs:', error);
+    } catch {
       return [];
     }
   }

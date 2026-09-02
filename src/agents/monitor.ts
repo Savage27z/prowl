@@ -22,8 +22,6 @@ export class MonitorAgent {
 
   // Scan for dead-end addresses and start watching them (L20 — referenced in README)
   async scanForDeadEnds(caseId: string): Promise<MonitorResult> {
-    console.log(`[Monitor] Scanning for dead-end addresses in case ${caseId}`);
-
     // Read Tracer's flagged dead-end addresses from Sibyl Memory
     const hops = await this.memory.query<Hop>(COLLECTIONS.HOPS, {
       filter: { case_id: caseId, flagged: true },
@@ -41,8 +39,6 @@ export class MonitorAgent {
       };
     }
 
-    console.log(`[Monitor] Found ${deadEnds.length} dead-end addresses to watch`);
-
     const watchEntries: WatchlistEntry[] = [];
 
     for (const hop of deadEnds) {
@@ -54,7 +50,6 @@ export class MonitorAgent {
       });
 
       if (existing.length > 0) {
-        console.log(`[Monitor] Already watching ${address}`);
         continue;
       }
 
@@ -77,7 +72,6 @@ export class MonitorAgent {
       );
       watchEntries.push(entry);
 
-      console.log(`[Monitor] Now watching: ${address} (${entry.reason})`);
     }
 
     return {
@@ -89,8 +83,6 @@ export class MonitorAgent {
 
   // Check all watched addresses for new activity
   async checkWatchlist(): Promise<MonitorResult> {
-    console.log('[Monitor] Checking all watched addresses...');
-
     const watchlist = await this.memory.query<WatchlistEntry>(COLLECTIONS.WATCHLIST, {
       filter: { status: 'watching' },
     });
@@ -102,8 +94,6 @@ export class MonitorAgent {
         summary: 'No addresses currently being monitored.',
       };
     }
-
-    console.log(`[Monitor] Checking ${watchlist.length} watched addresses`);
 
     const alerts: WatchlistEntry[] = [];
 
@@ -122,10 +112,6 @@ export class MonitorAgent {
 
         // Only alert if transaction is newer than last check
         if (txTime > lastCheckedTime) {
-          console.log(`[Monitor] 🚨 MOVEMENT DETECTED at ${entry.address}!`);
-          console.log(`[Monitor] TX: ${result.latestTx.hash}`);
-          console.log(`[Monitor] Amount: ${result.latestTx.value} ETH → ${result.latestTx.to}`);
-
           // Update watchlist entry
           await this.memory.update(COLLECTIONS.WATCHLIST, watchId, {
             status: 'moved',
@@ -229,7 +215,6 @@ export class MonitorAgent {
       alertId
     );
 
-    console.log(`[Monitor] Alert written to memory for Tracer: ${alertId}`);
   }
 
   // Get monitoring status

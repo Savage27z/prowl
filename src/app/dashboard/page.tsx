@@ -72,7 +72,7 @@ function buildChartPath(data: number[], width: number, height: number) {
 
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
-  const [, setActivities] = useState<Activity[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const eventSourceRef = useRef<EventSource | null>(null);
 
@@ -83,8 +83,8 @@ export default function Dashboard() {
         const data = await res.json();
         if (data.stats) setStats(data.stats);
       }
-    } catch (error) {
-      console.error('Failed to fetch data:', error);
+    } catch {
+      // api unavailable
     } finally {
       setLoading(false);
     }
@@ -295,6 +295,68 @@ export default function Dashboard() {
             <Link href="/agents" style={{ display: 'inline-block', fontFamily: 'var(--font-mono)', fontSize: '10.5px', letterSpacing: '0.14em', textTransform: 'uppercase', marginTop: 'var(--space-3)', color: 'var(--color-accent-700)' }}>View more →</Link>
           </section>
         </div>
+
+        {/* Live feed */}
+        <section>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
+            <h2 style={{ fontSize: 25, fontWeight: 400, margin: 0, fontFamily: 'var(--font-heading)' }}>Live feed</h2>
+            <span style={{
+              width: 8, height: 8, borderRadius: 999,
+              background: activities.length > 0 ? 'var(--color-status-solved)' : 'var(--color-neutral-400)',
+              boxShadow: activities.length > 0 ? '0 0 6px var(--color-status-solved)' : 'none',
+              animation: activities.length > 0 ? 'pw-blink 2s infinite' : 'none',
+            }} />
+            <span style={{ fontSize: 11, color: 'var(--color-neutral-600)', fontFamily: 'var(--font-mono)' }}>
+              {activities.length > 0 ? `${activities.length} events` : 'Waiting for agent activity…'}
+            </span>
+          </div>
+          <div style={{
+            borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)',
+            background: 'var(--color-neutral-100)', maxHeight: 260, overflowY: 'auto',
+          }}>
+            {activities.length === 0 ? (
+              <div style={{
+                padding: 'clamp(24px, 3vw, 40px)', textAlign: 'center',
+                color: 'var(--color-neutral-600)', fontFamily: 'var(--font-mono)', fontSize: 12,
+              }}>
+                Agent events will appear here in real time as investigations run.
+              </div>
+            ) : (
+              activities.slice(0, 20).map((a, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+                  padding: '10px var(--space-4)',
+                  borderBottom: i < Math.min(activities.length, 20) - 1 ? '1px solid var(--color-divider)' : 'none',
+                }}>
+                  <span style={{
+                    width: 26, height: 26, flex: '0 0 auto', borderRadius: 999,
+                    border: '1px solid var(--color-accent-300)', background: 'var(--color-accent-100)',
+                    display: 'grid', placeContent: 'center',
+                    fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--color-accent-700)',
+                    textTransform: 'uppercase',
+                  }}>
+                    {AGENT_META[a.agent]?.abbr || a.agent.slice(0, 2).toUpperCase()}
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 13 }}>
+                      <strong style={{ fontFamily: 'var(--font-heading)', fontWeight: 400 }}>{AGENT_META[a.agent]?.name || a.agent}</strong>
+                      {' — '}
+                      {a.action.replace(/_/g, ' ')}
+                    </span>
+                    {a.data?.case_id ? (
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--color-neutral-600)' }}>
+                        {String(a.data.case_id)}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--color-neutral-600)', whiteSpace: 'nowrap' }}>
+                    {new Date(a.timestamp).toLocaleTimeString()}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
 
         {/* Trails section */}
         {trails.length > 0 ? (
