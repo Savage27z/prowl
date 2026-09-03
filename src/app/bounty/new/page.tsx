@@ -41,6 +41,15 @@ export default function PostBounty() {
         throw new Error('Invalid transaction hash format');
       }
 
+      // Validate victim address appears in the incident transaction
+      setStep('api');
+      const txCheck = await fetch(`/api/validate-tx?tx=${incidentTx}&victim=${victimWallet}`);
+      const txCheckData = await txCheck.json();
+      if (!txCheck.ok || !txCheckData.valid) {
+        setStep('idle');
+        throw new Error(txCheckData.error || 'Victim address not found in this transaction. Make sure the wallet address is the sender or receiver in the tx.');
+      }
+
       const rewardEth = reward ? parseFloat(reward) : 0;
       const contract = getBountyContractConfig();
 
