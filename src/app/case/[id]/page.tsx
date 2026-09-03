@@ -248,12 +248,17 @@ function FundFlowGraph({ hops, analyses }: { hops: HopData[]; analyses: Analysis
     });
   }
 
-  const svgWidth = Math.max(600, padX * 2 + maxLayer * layerSpacing + 60);
+  // Size the SVG to fit the content, with a reasonable minimum
+  const contentWidth = padX * 2 + maxLayer * layerSpacing + 60;
+  const svgWidth = Math.max(400, contentWidth);
   const allY = nodes.map(n => n.y);
   const minY = Math.min(...allY, 40);
   const maxY = Math.max(...allY, 200);
-  const svgHeight = maxY - minY + 140;
+  const svgHeight = Math.max(200, maxY - minY + 140);
   const yOffset = -minY + 60;
+
+  // Center the graph when content is smaller than the container
+  const xCenter = nodes.length <= 3 ? (svgWidth - contentWidth) / 2 : 0;
 
   const riskColor = (risk: string) => {
     switch (risk) {
@@ -268,9 +273,10 @@ function FundFlowGraph({ hops, analyses }: { hops: HopData[]; analyses: Analysis
     <div style={{ overflowX: 'auto', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)', background: 'var(--color-card)' }}>
       <svg
         viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-        width={svgWidth}
+        width="100%"
         height={svgHeight}
-        style={{ display: 'block', minWidth: svgWidth }}
+        preserveAspectRatio="xMidYMid meet"
+        style={{ display: 'block', maxWidth: svgWidth }}
       >
         <defs>
           <marker id="arrow" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
@@ -286,9 +292,9 @@ function FundFlowGraph({ hops, analyses }: { hops: HopData[]; analyses: Analysis
           const fromNode = nodeMap.get(edge.from);
           const toNode = nodeMap.get(edge.to);
           if (!fromNode || !toNode) return null;
-          const x1 = fromNode.x + 24;
+          const x1 = fromNode.x + xCenter + 24;
           const y1 = fromNode.y + yOffset;
-          const x2 = toNode.x - 24;
+          const x2 = toNode.x + xCenter - 24;
           const y2 = toNode.y + yOffset;
           const midX = (x1 + x2) / 2;
 
@@ -319,7 +325,7 @@ function FundFlowGraph({ hops, analyses }: { hops: HopData[]; analyses: Analysis
 
         {/* Nodes */}
         {nodes.map((node) => {
-          const nx = node.x;
+          const nx = node.x + xCenter;
           const ny = node.y + yOffset;
           const color = riskColor(node.risk);
           const isTerminal = node.isSource || node.isSink;
