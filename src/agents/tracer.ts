@@ -25,6 +25,10 @@ export class TracerAgent {
   private totalHopsTraced = 0;   // global counter
   private traceDeadline = 0;     // timestamp ceiling (25s)
   private excludeHashes = new Set<string>(); // tx hashes to skip (prevent loops)
+  // Memory-driven directives from Analyst (cross-case intelligence)
+  private skipAddresses = new Set<string>();  // addresses Analyst says to skip
+  private prioritizeAddresses = new Set<string>(); // addresses Analyst says to prioritize
+  private memoryHits: string[] = [];          // log of memory-driven decisions
 
   // Start tracing from an incident transaction
   async startTrace(caseId: string, incidentTxHash: string, victimWallet: string, suspectAddress?: string): Promise<TraceResult> {
@@ -39,10 +43,14 @@ export class TracerAgent {
       };
     }
 
-    // Check if Analyst has any tips for us from memory
-    const existingAnalysis = await this.checkAnalystTips(caseId);
-    if (existingAnalysis.length > 0) {
-    }
+    // Load cross-case intelligence from Analyst's memory
+    // This is the core memory feedback loop: Analyst writes directives,
+    // Tracer reads them to skip known-safe addresses, prioritize suspects,
+    // and avoid re-tracing paths already investigated in prior cases.
+    this.skipAddresses.clear();
+    this.prioritizeAddresses.clear();
+    this.memoryHits = [];
+    await this.loadMemoryDirectives();
 
     // Determine where to start tracing:
     // Priority 1: If suspect/drainer address is provided, trace directly from there.
@@ -190,18 +198,51 @@ export class TracerAgent {
     const sorted = [...outgoingTxs].sort((a, b) => parseFloat(b.value) - parseFloat(a.value));
     const isSplit = sorted.length > 1;
 
-    // AI-powered branch prioritization — when there are many branches,
-    // ask the AI which ones look most suspicious to trace first
-    let branchesToTrace = sorted.slice(0, this.maxBranches);
-    if (sorted.length > 3) {
-      const aiPriority = await this.aiBranchPriority(address, sorted.slice(0, 8), isContractAddr);
+    // ── MEMORY-DRIVEN BRANCH SELECTION ──────────────────────────────
+    // Priority 1: Memory directives (cross-case intelligence from Analyst)
+    // Priority 2: AI branch prioritization (per-case reasoning)
+    // Priority 3: Value-based sorting (default)
+    //
+    // This is where memory changes the investigation outcome:
+    // With memory: known high-risk addresses from prior cases get traced first
+    // Without memory: purely value-based, may miss the real laundering path
+
+    // Separate memory-prioritized branches from the rest
+    const memoryPrioritized = sorted.filter(
+      tx => this.prioritizeAddresses.has(tx.to.toLowerCase())
+    );
+    const memorySkipped = sorted.filter(
+      tx => this.skipAddresses.has(tx.to.toLowerCase())
+    );
+    const remaining = sorted.filter(
+      tx => !this.prioritizeAddresses.has(tx.to.toLowerCase()) &&
+            !this.skipAddresses.has(tx.to.toLowerCase())
+    );
+
+    // Log memory-driven decisions
+    for (const tx of memoryPrioritized) {
+      this.memoryHits.push(
+        `DECISION: Prioritized ${tx.to.slice(0, 10)}... (memory: known from prior case)`
+      );
+    }
+    for (const tx of memorySkipped) {
+      this.memoryHits.push(
+        `DECISION: Skipped ${tx.to.slice(0, 10)}... (memory: known safe/irrelevant)`
+      );
+    }
+
+    // Build branch list: memory-prioritized first, then AI/value-sorted rest
+    let branchesToTrace = [...memoryPrioritized, ...remaining].slice(0, this.maxBranches);
+
+    // AI-powered branch prioritization for the remaining (non-memory) branches
+    if (remaining.length > 3) {
+      const aiPriority = await this.aiBranchPriority(address, remaining.slice(0, 8), isContractAddr);
       if (aiPriority.length > 0) {
-        // Re-order: AI-prioritized addresses first, then by value
         const prioritized = aiPriority
-          .map(addr => sorted.find(tx => tx.to.toLowerCase() === addr.toLowerCase()))
+          .map(addr => remaining.find(tx => tx.to.toLowerCase() === addr.toLowerCase()))
           .filter((tx): tx is NonNullable<typeof tx> => tx != null);
-        const rest = sorted.filter(tx => !aiPriority.includes(tx.to.toLowerCase()));
-        branchesToTrace = [...prioritized, ...rest].slice(0, this.maxBranches);
+        const rest = remaining.filter(tx => !aiPriority.includes(tx.to.toLowerCase()));
+        branchesToTrace = [...memoryPrioritized, ...prioritized, ...rest].slice(0, this.maxBranches);
       }
     }
 
@@ -211,6 +252,14 @@ export class TracerAgent {
 
       const tx = branchesToTrace[i];
       const newBranchId = isSplit ? `${branchId}-${i}` : branchId;
+
+      // Check if this destination was informed by memory
+      const isMemoryDriven = this.prioritizeAddresses.has(tx.to.toLowerCase());
+      const flagReason = isMemoryDriven
+        ? 'Memory hit — address flagged in prior investigation'
+        : isContractAddr
+          ? 'Contract interaction detected'
+          : null;
 
       const hop: Hop = {
         case_id: caseId,
@@ -222,8 +271,8 @@ export class TracerAgent {
         timestamp: tx.timestamp,
         is_split: isSplit,
         branch_id: newBranchId,
-        flagged: isContractAddr,
-        flag_reason: isContractAddr ? 'Contract interaction detected' : null,
+        flagged: isContractAddr || isMemoryDriven,
+        flag_reason: flagReason,
       };
 
       hops.push(hop);
@@ -316,16 +365,76 @@ Prioritize: large value transfers, round numbers, rapid timing, contract interac
     await this.memory.store(COLLECTIONS.HOPS, hop as unknown as Record<string, unknown>, hopId);
   }
 
-  // Read analyst tips from memory (L90 — referenced in README)
-  private async checkAnalystTips(caseId: string): Promise<string[]> {
+  // Load cross-case memory directives from Analyst's past analyses
+  // This is where memory becomes load-bearing: past investigations teach
+  // the Tracer which addresses to prioritize, skip, or flag immediately.
+  // Without memory, the Tracer has no prior intelligence — every case starts blind.
+  private async loadMemoryDirectives(): Promise<void> {
     try {
-      const analyses = await this.memory.query<{ notes: string; address_analyzed: string }>(
-        COLLECTIONS.ANALYSIS,
-        { filter: { case_id: caseId } }
-      );
-      return analyses.map((a) => `${a.address_analyzed}: ${a.notes}`);
-    } catch {
-      return [];
+      // Load ALL past analyses (not just this case — cross-case intelligence)
+      const allAnalyses = await this.memory.query<{
+        address_analyzed: string;
+        risk_level: string;
+        notes: string;
+        case_id: string;
+        similar_cases: string[];
+        pattern_matches: string[];
+      }>(COLLECTIONS.ANALYSIS, {});
+
+      // Load known patterns from memory
+      const patterns = await this.memory.query<{
+        pattern_type: string;
+        related_addresses: string[];
+        times_matched: number;
+        description: string;
+      }>(COLLECTIONS.PATTERNS, {});
+
+      if (allAnalyses.length === 0 && patterns.length === 0) {
+        this.memoryHits.push('NO_MEMORY: Operating without cross-case intelligence');
+        return;
+      }
+
+      // Build directive sets from past analyses
+      for (const analysis of allAnalyses) {
+        const addr = analysis.address_analyzed.toLowerCase();
+
+        // High-risk addresses from prior cases → prioritize tracing through them
+        if (analysis.risk_level === 'high') {
+          this.prioritizeAddresses.add(addr);
+          this.memoryHits.push(
+            `MEMORY_PRIORITIZE: ${addr.slice(0, 10)}... flagged HIGH in case ${analysis.case_id}`
+          );
+        }
+
+        // Addresses that appeared in 2+ cases → known entity, prioritize
+        if (analysis.similar_cases && analysis.similar_cases.length > 0) {
+          this.prioritizeAddresses.add(addr);
+          this.memoryHits.push(
+            `MEMORY_CROSS_CASE: ${addr.slice(0, 10)}... seen in ${analysis.similar_cases.length + 1} cases`
+          );
+        }
+      }
+
+      // Pattern-linked addresses → skip or prioritize based on pattern type
+      for (const pattern of patterns) {
+        for (const addr of pattern.related_addresses) {
+          const lower = addr.toLowerCase();
+          if (pattern.pattern_type === 'bridge_usage' || pattern.pattern_type === 'fund_splitting') {
+            // Known laundering patterns → prioritize these addresses
+            this.prioritizeAddresses.add(lower);
+            this.memoryHits.push(
+              `MEMORY_PATTERN: ${lower.slice(0, 10)}... linked to ${pattern.pattern_type} (matched ${pattern.times_matched}x)`
+            );
+          }
+        }
+      }
+
+      if (this.memoryHits.length > 0) {
+        console.log(`[Tracer] Loaded ${this.memoryHits.length} memory directives: ${this.prioritizeAddresses.size} prioritize, ${this.skipAddresses.size} skip`);
+      }
+    } catch (err) {
+      console.error('[Tracer] Failed to load memory directives:', err);
+      this.memoryHits.push('MEMORY_ERROR: Could not load cross-case intelligence');
     }
   }
 
@@ -361,11 +470,17 @@ Prioritize: large value transfers, round numbers, rapid timing, contract interac
       `Hop ${h.hop_number}: ${h.from_address.slice(0, 8)}... → ${h.to_address.slice(0, 8)}... (${h.amount} ETH)${h.flagged ? ` [FLAGGED: ${h.flag_reason}]` : ''}`
     ).join('\n');
 
+    // Include memory state in the summary for transparency
+    const memoryContext = this.memoryHits.length > 0
+      ? `\nMemory directives active: ${this.memoryHits.length} (${this.prioritizeAddresses.size} prioritized, ${this.skipAddresses.size} skipped)`
+      : '\nMemory: No cross-case intelligence available (first investigation or memory cleared)';
+
     const prompt = `You are an onchain forensic investigator. Summarize this fund tracing result for case ${caseId}:
 
 Status: ${status}
 Total hops: ${hops.length}
 Splits detected: ${hops.filter((h) => h.is_split).length}
+${memoryContext}
 
 Hop trail:
 ${hopSummary}

@@ -147,8 +147,8 @@ function CountUp({ value, suffix = '', duration = 1.6 }: { value: string; suffix
   const [display, setDisplay] = useState(value);
   const isNumeric = /^\d+$/.test(value);
 
-  useEffect(() => {
-    if (!visible || !isNumeric) { setDisplay(value); return; }
+  useEffect(() => { // eslint-disable-line react-hooks/set-state-in-effect -- setState in interval callback is correct
+    if (!visible || !isNumeric) { setDisplay(value); return; } // eslint-disable-line react-hooks/set-state-in-effect
     const target = parseInt(value);
     const steps = 30;
     const stepDuration = (duration * 1000) / steps;

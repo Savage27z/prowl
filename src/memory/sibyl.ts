@@ -479,10 +479,45 @@ const dualMemory = {
   },
 };
 
+// ─── Sibyl Bridge hydration ────────────────────────────────────
+// On startup, hydrate the local cache from the bridge's /list endpoint
+// so that cross-run knowledge persists through Sibyl (not just Redis).
+let _bridgeHydrated = false;
+
+async function hydrateFromBridge(): Promise<void> {
+  if (_bridgeHydrated || !BRIDGE_URL) return;
+  _bridgeHydrated = true;
+  try {
+    for (const collectionName of Object.values(COLLECTIONS)) {
+      const res = await bridgeFetch(`/list?category=${collectionName}`);
+      const entities = (res?.entities || res?.items || []) as { name: string; data: Record<string, unknown> }[];
+      if (entities.length > 0) {
+        const c = col(collectionName);
+        for (const entity of entities) {
+          if (entity.name && entity.data && !c.has(entity.name)) {
+            c.set(entity.name, {
+              id: entity.name,
+              data: entity.data,
+              ts: new Date().toISOString(),
+            });
+          }
+        }
+        console.log(`[SibylMemory] Hydrated ${entities.length} docs from Sibyl bridge for ${collectionName}`);
+      }
+    }
+  } catch (e) {
+    console.log('[SibylMemory] Bridge hydration skipped (bridge unavailable):', e);
+  }
+}
+
 export function getSibylMemory(): MemoryAPI {
   // Hydrate from Redis on first call (non-blocking)
   if (REDIS_URL) {
     hydrateFromRedis();
+  }
+  // Hydrate from Sibyl Bridge on first call (non-blocking)
+  if (BRIDGE_URL) {
+    hydrateFromBridge();
   }
   // Ensure seed data exists on cold start (non-blocking)
   ensureSeeded();

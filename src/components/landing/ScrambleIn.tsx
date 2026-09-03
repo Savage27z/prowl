@@ -16,7 +16,7 @@ export default function ScrambleIn({ text, delay = 0, triggered = false, classNa
   const [display, setDisplay] = useState('');
   const started = useRef(false);
 
-  useEffect(() => {
+  useEffect(() => { // eslint-disable-line react-hooks/set-state-in-effect -- setState in interval callback is correct
     if (!triggered || started.current) return;
     started.current = true;
 

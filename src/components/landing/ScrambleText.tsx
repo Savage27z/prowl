@@ -15,7 +15,7 @@ export default function ScrambleText({ text, isHovered, className }: ScrambleTex
   const [display, setDisplay] = useState(text);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
+  useEffect(() => { // eslint-disable-line react-hooks/set-state-in-effect -- setState in interval/else is correct
     if (isHovered) {
       let frame = 0;
       intervalRef.current = setInterval(() => {
