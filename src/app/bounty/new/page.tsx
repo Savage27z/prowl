@@ -16,6 +16,7 @@ export default function PostBounty() {
   const { switchChainAsync } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
   const [victimWallet, setVictimWallet] = useState('');
+  const [suspectAddress, setSuspectAddress] = useState('');
   const [incidentTx, setIncidentTx] = useState('');
   const [description, setDescription] = useState('');
   const [reward, setReward] = useState('');
@@ -37,17 +38,11 @@ export default function PostBounty() {
       if (!victimWallet.match(/^0x[a-fA-F0-9]{40}$/)) {
         throw new Error('Invalid wallet address format');
       }
+      if (suspectAddress && !suspectAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
+        throw new Error('Invalid suspect address format');
+      }
       if (!incidentTx.match(/^0x[a-fA-F0-9]{64}$/)) {
         throw new Error('Invalid transaction hash format');
-      }
-
-      // Validate victim address appears in the incident transaction
-      setStep('api');
-      const txCheck = await fetch(`/api/validate-tx?tx=${incidentTx}&victim=${victimWallet}`);
-      const txCheckData = await txCheck.json();
-      if (!txCheck.ok || !txCheckData.valid) {
-        setStep('idle');
-        throw new Error(txCheckData.error || 'Victim address not found in this transaction. Make sure the wallet address is the sender or receiver in the tx.');
       }
 
       const rewardEth = reward ? parseFloat(reward) : 0;
@@ -92,6 +87,7 @@ export default function PostBounty() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           victimWallet, incidentTx, description,
+          suspectAddress: suspectAddress || undefined,
           reward: reward ? `${reward} ETH` : '0 ETH',
           txHash: txHash || undefined,
         }),
@@ -142,6 +138,16 @@ export default function PostBounty() {
               Victim wallet address *
             </label>
             <input type="text" value={victimWallet} onChange={(e) => setVictimWallet(e.target.value)} placeholder="0x…" required style={inputStyle} />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '9.5px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--color-neutral-600)', marginBottom: 6 }}>
+              Suspect / drainer address
+            </label>
+            <input type="text" value={suspectAddress} onChange={(e) => setSuspectAddress(e.target.value)} placeholder="0x… (if known)" style={inputStyle} />
+            <p style={{ fontSize: 11, color: 'var(--color-neutral-600)', marginTop: 4 }}>
+              If you know who drained the funds, paste their address. Agents will trace from here.
+            </p>
           </div>
 
           <div>

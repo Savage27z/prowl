@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
       );
     }
     const body = await req.json();
-    const { bountyId, victimWallet, incidentTx, reward, description } = body;
+    const { bountyId, victimWallet, incidentTx, reward, description, suspectAddress } = body;
 
     if (!victimWallet || !incidentTx) {
       return NextResponse.json(
@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
       incidentTx,
       reward || '0 ETH',
       description,
+      suspectAddress,
     );
 
     // Run the investigation pipeline synchronously so results are available

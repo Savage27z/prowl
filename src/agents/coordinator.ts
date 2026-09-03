@@ -53,12 +53,13 @@ export class Coordinator {
     victimWallet: string,
     incidentTx: string,
     reward: string,
-    description?: string
+    description?: string,
+    suspectAddress?: string
   ): Promise<string> {
     const caseId = `prowl-${Date.now().toString(36)}`;
 
     // Create case in Sibyl Memory
-    const caseData: Case = {
+    const caseData: Case & { suspect_address?: string } = {
       case_id: caseId,
       bounty_id: bountyId,
       victim_wallet: victimWallet,
@@ -71,6 +72,7 @@ export class Coordinator {
       total_funds_traced: '0 ETH',
       agents_involved: [],
     };
+    if (suspectAddress) caseData.suspect_address = suspectAddress;
 
     await this.memory.store(
       COLLECTIONS.CASES,
@@ -82,7 +84,7 @@ export class Coordinator {
       caseId,
       agent: 'coordinator',
       action: 'case_created',
-      data: { bountyId, victimWallet, reward, description },
+      data: { bountyId, victimWallet, reward, description, suspectAddress },
     });
 
     return caseId;
@@ -90,26 +92,27 @@ export class Coordinator {
 
   // Run the investigation pipeline for a case (call separately so the API can return first)
   async runInvestigation(caseId: string): Promise<void> {
-    const caseData = await this.getCase(caseId);
+    const caseData = await this.getCase(caseId) as (Case & { suspect_address?: string }) | null;
     if (!caseData) return;
-    await this.runPipeline(caseId, caseData.incident_tx, caseData.victim_wallet);
+    await this.runPipeline(caseId, caseData.incident_tx, caseData.victim_wallet, caseData.suspect_address);
   }
 
   // The main investigation pipeline
   private async runPipeline(
     caseId: string,
     incidentTx: string,
-    victimWallet: string
+    victimWallet: string,
+    suspectAddress?: string
   ): Promise<void> {
     // Step 1: Tracer traces the funds
     this.emit({
       caseId,
       agent: 'tracer',
       action: 'tracing_started',
-      data: { incidentTx, victimWallet },
+      data: { incidentTx, victimWallet, suspectAddress },
     });
 
-    const traceResult = await this.tracer.startTrace(caseId, incidentTx, victimWallet);
+    const traceResult = await this.tracer.startTrace(caseId, incidentTx, victimWallet, suspectAddress);
 
     this.emit({
       caseId,

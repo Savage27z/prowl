@@ -27,7 +27,7 @@ export class TracerAgent {
   private excludeHashes = new Set<string>(); // tx hashes to skip (prevent loops)
 
   // Start tracing from an incident transaction
-  async startTrace(caseId: string, incidentTxHash: string, victimWallet: string): Promise<TraceResult> {
+  async startTrace(caseId: string, incidentTxHash: string, victimWallet: string, suspectAddress?: string): Promise<TraceResult> {
 
     // Get the incident transaction
     const tx = await chain.getTransaction(incidentTxHash);
@@ -45,26 +45,32 @@ export class TracerAgent {
     }
 
     // Determine where to start tracing:
-    // The goal is to follow the stolen funds FORWARD from the thief.
-    // If tx.from IS the victim — victim sent funds out, trace from tx.to (the thief/recipient).
-    // If tx.to IS the victim — someone sent funds to victim, trace from tx.from (the sender).
-    // Otherwise — trace from tx.to as default.
+    // Priority 1: If suspect/drainer address is provided, trace directly from there.
+    // Priority 2: If tx.from IS the victim — trace from tx.to (the thief/recipient).
+    // Priority 3: If tx.to IS the victim — trace from tx.from (the sender).
+    // Default: trace from tx.to.
     let traceStartAddress: string;
     let traceStartAmount: string;
 
-    const victimLower = victimWallet.toLowerCase();
-    if (tx.from.toLowerCase() === victimLower) {
-      // Victim sent funds — trace from the recipient (the thief)
-      traceStartAddress = tx.to;
-      traceStartAmount = tx.value;
-    } else if (tx.to.toLowerCase() === victimLower) {
-      // Someone sent funds TO victim — trace back from the sender
-      traceStartAddress = tx.from;
+    if (suspectAddress) {
+      // User provided the drainer address — trace directly from there
+      traceStartAddress = suspectAddress;
       traceStartAmount = tx.value;
     } else {
-      // Neither — trace from tx.to
-      traceStartAddress = tx.to;
-      traceStartAmount = tx.value;
+      const victimLower = victimWallet.toLowerCase();
+      if (tx.from.toLowerCase() === victimLower) {
+        // Victim sent funds — trace from the recipient (the thief)
+        traceStartAddress = tx.to;
+        traceStartAmount = tx.value;
+      } else if (tx.to.toLowerCase() === victimLower) {
+        // Someone sent funds TO victim — trace back from the sender
+        traceStartAddress = tx.from;
+        traceStartAmount = tx.value;
+      } else {
+        // Neither — trace from tx.to
+        traceStartAddress = tx.to;
+        traceStartAmount = tx.value;
+      }
     }
 
     // Reset per-investigation limits
