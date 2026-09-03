@@ -16,6 +16,7 @@ interface AnalysisResult {
   newPatterns: Pattern[];
   overallRisk: 'high' | 'medium' | 'low';
   summary: string;
+  memoryDegraded?: boolean;
 }
 
 export class AnalystAgent {
@@ -42,6 +43,10 @@ export class AnalystAgent {
     const knownPatterns = await this.memory.query<Pattern>(COLLECTIONS.PATTERNS, {});
     // Load past analyses for cross-case correlation
     const pastAnalyses = await this.memory.query<Analysis>(COLLECTIONS.ANALYSIS, {});
+
+    // ⚠ DEGRADATION CHECK — memory deletion test
+    // If pattern database is empty, agents lose cross-case intelligence
+    const memoryDegraded = knownPatterns.length === 0 && pastAnalyses.length === 0;
 
     // Analyze each hop
     const analyses: Analysis[] = [];
@@ -83,9 +88,14 @@ export class AnalystAgent {
     const overallRisk = this.calculateOverallRisk(analyses);
 
     // Generate AI summary
-    const summary = await this.generateAnalysisSummary(caseId, hops, analyses, newPatterns);
+    let summary = await this.generateAnalysisSummary(caseId, hops, analyses, newPatterns);
 
-    return { analyses, newPatterns, overallRisk, summary };
+    // Append degradation warnings if memory was empty
+    if (memoryDegraded) {
+      summary = `⚠ MEMORY DEGRADED — No pattern database found. Analyst is operating blind: no cross-case correlation, no known scam signatures, no historical intelligence. Every investigation starts from zero. Restore Sibyl Memory to enable pattern matching.\n\n${summary}`;
+    }
+
+    return { analyses, newPatterns, overallRisk, summary, memoryDegraded };
   }
 
   // Analyze a single hop

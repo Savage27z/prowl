@@ -105,8 +105,13 @@ function actionLabel(action: string): string {
     connected: 'Stream connected',
     bounty_claimed: 'Bounty claimed on-chain',
     report_submitted: 'Report submitted on-chain',
+    memory_degraded: '⚠ MEMORY FAILURE',
   };
   return labels[action] || action.replace(/_/g, ' ');
+}
+
+function isDegradedEvent(action: string): boolean {
+  return action === 'memory_degraded';
 }
 
 function timeAgo(ts: string): string {
@@ -831,12 +836,13 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
               const agentColor = AGENT_COLORS[event.agent] || 'var(--color-neutral-600)';
               const icon = AGENT_ICONS[event.agent] || '??';
               const isMilestone = ['tracing_complete', 'analysis_complete', 'case_solved', 'monitoring_setup'].includes(event.action);
+              const isDegraded = isDegradedEvent(event.action);
 
               return (
                 <div key={event.id} style={{
                   borderRadius: 'var(--radius-md)',
-                  border: `1px solid ${isMilestone ? 'var(--color-accent-300)' : 'var(--color-divider)'}`,
-                  background: isMilestone ? 'var(--color-accent-100)' : 'var(--color-card)',
+                  border: `1px solid ${isDegraded ? '#f85149' : isMilestone ? 'var(--color-accent-300)' : 'var(--color-divider)'}`,
+                  background: isDegraded ? 'rgba(248, 81, 73, 0.08)' : isMilestone ? 'var(--color-accent-100)' : 'var(--color-card)',
                   padding: 'var(--space-3)',
                   animation: 'pw-fade-up 0.4s ease-out both',
                 }}>
@@ -844,20 +850,27 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
                     {/* Agent icon */}
                     <span style={{
                       width: 26, height: 26, borderRadius: 999, flexShrink: 0,
-                      border: `1px solid ${agentColor}`,
+                      border: `1px solid ${isDegraded ? '#f85149' : agentColor}`,
                       display: 'grid', placeContent: 'center',
-                      fontFamily: 'var(--font-heading)', fontSize: 10, color: agentColor,
-                      background: 'rgba(255,255,255,0.5)',
-                    }}>{icon}</span>
+                      fontFamily: 'var(--font-heading)', fontSize: 10,
+                      color: isDegraded ? '#f85149' : agentColor,
+                      background: isDegraded ? 'rgba(248, 81, 73, 0.12)' : 'rgba(255,255,255,0.5)',
+                    }}>{isDegraded ? '!!' : icon}</span>
 
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <span style={{
-                        fontFamily: 'var(--font-heading)', fontSize: 14, color: agentColor,
+                        fontFamily: 'var(--font-heading)', fontSize: 14,
+                        color: isDegraded ? '#f85149' : agentColor,
                         textTransform: 'capitalize',
                       }}>
                         {event.agent}
                       </span>
-                      <span style={{ fontSize: 12, color: 'var(--color-neutral-600)', marginLeft: 8 }}>
+                      <span style={{
+                        fontSize: 12,
+                        color: isDegraded ? '#f85149' : 'var(--color-neutral-600)',
+                        marginLeft: 8,
+                        fontWeight: isDegraded ? 600 : 400,
+                      }}>
                         {actionLabel(event.action)}
                       </span>
                     </div>
@@ -867,8 +880,30 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
                     </span>
                   </div>
 
+                  {/* Degradation warning banner */}
+                  {isDegraded && Boolean(event.data?.warning) && (
+                    <div style={{
+                      background: 'rgba(248, 81, 73, 0.06)',
+                      border: '1px dashed rgba(248, 81, 73, 0.3)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '8px 12px',
+                      marginTop: 4,
+                      fontSize: 12,
+                      lineHeight: 1.5,
+                    }}>
+                      <div style={{ color: '#f85149', fontWeight: 600, marginBottom: 2 }}>
+                        {String(event.data.warning)}
+                      </div>
+                      {Boolean(event.data.impact) && (
+                        <div style={{ color: 'var(--color-neutral-600)', fontStyle: 'italic' }}>
+                          {String(event.data.impact)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Event details */}
-                  {event.data && Object.keys(event.data).length > 0 && (
+                  {!isDegraded && event.data && Object.keys(event.data).length > 0 && (
                     <EventDetails data={event.data} />
                   )}
                 </div>

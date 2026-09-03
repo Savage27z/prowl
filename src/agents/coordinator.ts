@@ -132,6 +132,19 @@ export class Coordinator {
 
     const analysisResult = await this.analyst.analyzeCase(caseId);
 
+    // ⚠ Emit degradation warning if memory was empty
+    if (analysisResult.memoryDegraded) {
+      this.emit({
+        caseId,
+        agent: 'analyst',
+        action: 'memory_degraded',
+        data: {
+          warning: 'No pattern database — Analyst cannot match against known scam signatures or past cases. Cross-case intelligence is unavailable.',
+          impact: 'Every investigation starts from zero. Pattern matching disabled.',
+        },
+      });
+    }
+
     this.emit({
       caseId,
       agent: 'analyst',
@@ -141,11 +154,26 @@ export class Coordinator {
         newPatterns: analysisResult.newPatterns.length,
         overallRisk: analysisResult.overallRisk,
         summary: analysisResult.summary,
+        memoryDegraded: analysisResult.memoryDegraded || false,
       },
     });
 
     // Step 3: If there are dead ends, Monitor starts watching
     if (traceResult.status === 'dead_end') {
+      // Check if watchlist was wiped (deletion test)
+      const existingWatchlist = await this.memory.query(COLLECTIONS.WATCHLIST, {});
+      if (existingWatchlist.length === 0 && analysisResult.memoryDegraded) {
+        this.emit({
+          caseId,
+          agent: 'monitor',
+          action: 'memory_degraded',
+          data: {
+            warning: 'No watchlist data — Monitor has no record of previously dormant wallets. Surveillance history lost.',
+            impact: 'Cannot resume prior investigations. All dormant wallet tracking reset to zero.',
+          },
+        });
+      }
+
       this.emit({
         caseId,
         agent: 'monitor',

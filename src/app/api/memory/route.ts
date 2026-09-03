@@ -3,7 +3,7 @@
 // Used by the Memory debug page and deletion test demo
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getSibylMemory } from '@/memory/sibyl';
+import { getSibylMemory, getMemoryMode } from '@/memory/sibyl';
 import { COLLECTIONS } from '@/memory/schemas';
 import { requireAuth } from '@/lib/auth';
 
@@ -16,8 +16,9 @@ export async function GET() {
     if (auth instanceof NextResponse) return auth;
     const health = await memory.healthCheck();
     const collections = memory.dump();
+    const memoryMode = getMemoryMode();
 
-    return NextResponse.json({ health, collections });
+    return NextResponse.json({ health, collections, memoryMode });
   } catch (error) {
     console.error('[API] Memory check failed:', error);
     return NextResponse.json(

@@ -1,0 +1,429 @@
+<title>Prowl Hackathon Audit</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #0e1117;
+    --surface: #161b22;
+    --surface-raised: #1c2129;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #c8a87c;
+    --accent-dim: rgba(200, 168, 124, 0.15);
+    --good: #3fb950;
+    --good-dim: rgba(63, 185, 80, 0.12);
+    --warn: #d29922;
+    --warn-dim: rgba(210, 153, 34, 0.12);
+    --crit: #f85149;
+    --crit-dim: rgba(248, 81, 73, 0.12);
+    --font-body: 'DM Sans', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f6f7f9;
+      --surface: #ffffff;
+      --surface-raised: #f0f1f3;
+      --border: #d8dce2;
+      --text: #1c2129;
+      --text-muted: #57606a;
+      --accent: #96723a;
+      --accent-dim: rgba(150, 114, 58, 0.1);
+      --good: #1a7f37;
+      --good-dim: rgba(26, 127, 55, 0.08);
+      --warn: #9a6700;
+      --warn-dim: rgba(154, 103, 0, 0.08);
+      --crit: #cf222e;
+      --crit-dim: rgba(207, 34, 46, 0.08);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --surface-raised: #f0f1f3;
+    --border: #d8dce2;
+    --text: #1c2129;
+    --text-muted: #57606a;
+    --accent: #96723a;
+    --accent-dim: rgba(150, 114, 58, 0.1);
+    --good: #1a7f37;
+    --good-dim: rgba(26, 127, 55, 0.08);
+    --warn: #9a6700;
+    --warn-dim: rgba(154, 103, 0, 0.08);
+    --crit: #cf222e;
+    --crit-dim: rgba(207, 34, 46, 0.08);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    line-height: 1.6;
+    max-width: 740px;
+    margin: 0 auto;
+    padding: 40px 20px 80px;
+  }
+
+  h1 { font-size: 28px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.02em; }
+  h2 { font-size: 18px; font-weight: 600; margin: 40px 0 16px; letter-spacing: -0.01em; }
+
+  .subtitle { color: var(--text-muted); font-size: 14px; margin: 0 0 32px; }
+  .date { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); margin-bottom: 2px; }
+
+  .scores { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 24px 0 8px; }
+  .score-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    text-align: center;
+  }
+  .score-card .label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .score-card .num {
+    font-family: var(--font-mono);
+    font-size: 26px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .score-card .denom {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .score-card.final { border-color: var(--accent); background: var(--accent-dim); }
+  .score-card.final .num { color: var(--accent); }
+
+  .cat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin: 16px 0;
+  }
+  .cat-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+  .cat-title { font-size: 17px; font-weight: 600; margin: 0; }
+  .cat-score { font-family: var(--font-mono); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .bar-track { height: 6px; background: var(--surface-raised); border-radius: 3px; margin: 8px 0 16px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; }
+  .bar-fill.green { background: var(--good); }
+  .bar-fill.yellow { background: var(--warn); }
+  .bar-fill.red { background: var(--crit); }
+
+  .finding { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; line-height: 1.5; }
+  .finding:last-child { border-bottom: none; }
+  .tag {
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 4px;
+    height: fit-content;
+    margin-top: 2px;
+  }
+  .tag.pass { color: var(--good); background: var(--good-dim); }
+  .tag.warn { color: var(--warn); background: var(--warn-dim); }
+  .tag.fail { color: var(--crit); background: var(--crit-dim); }
+  .tag.info { color: var(--accent); background: var(--accent-dim); }
+
+  .finding-text code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--surface-raised);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  .actions { margin-top: 20px; }
+  .action {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 10px 14px;
+    margin: 6px 0;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .action.critical { background: var(--crit-dim); border-left: 3px solid var(--crit); }
+  .action.important { background: var(--warn-dim); border-left: 3px solid var(--warn); }
+  .action.nice { background: var(--good-dim); border-left: 3px solid var(--good); }
+  .action-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .action.critical .action-label { color: var(--crit); }
+  .action.important .action-label { color: var(--warn); }
+  .action.nice .action-label { color: var(--good); }
+
+  .bottom-line {
+    background: var(--accent-dim);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin-top: 32px;
+  }
+  .bottom-line h2 { margin-top: 0; color: var(--accent); }
+
+  ul { padding-left: 20px; margin: 8px 0; }
+  li { font-size: 14px; margin: 4px 0; }
+  strong { font-weight: 600; }
+  a { color: var(--accent); }
+</style>
+
+<div class="date">Sep 3, 2026 · Submission deadline Sep 10</div>
+<h1>Prowl Hackathon Audit</h1>
+<p class="subtitle">Honest scoring against the Sibyl Labs judging rubric. Where you stand, what's strong, what to fix before submission.</p>
+
+<div class="scores">
+  <div class="score-card">
+    <div class="label">Memory</div>
+    <div class="num">32 <span class="denom">/ 40</span></div>
+  </div>
+  <div class="score-card">
+    <div class="label">Innovation</div>
+    <div class="num">20 <span class="denom">/ 25</span></div>
+  </div>
+  <div class="score-card">
+    <div class="label">Technical</div>
+    <div class="num">14 <span class="denom">/ 20</span></div>
+  </div>
+  <div class="score-card">
+    <div class="label">Pitch</div>
+    <div class="num">0 <span class="denom">/ 15</span></div>
+  </div>
+  <div class="score-card">
+    <div class="label">PMF</div>
+    <div class="num">7 <span class="denom">/ 10</span></div>
+  </div>
+  <div class="score-card final">
+    <div class="label">Projected</div>
+    <div class="num">91 <span class="denom">/ 120</span></div>
+  </div>
+</div>
+<p style="font-size:12px; color:var(--text-muted); text-align:right; margin:0 0 8px;">
+  Subtotal 73/110 × 1.25 partner multiplier = <strong>91.25</strong> &nbsp;|&nbsp; Top-3 target ≥ 100
+</p>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="cat">
+  <div class="cat-header">
+    <div class="cat-title">Memory · 40% of score</div>
+    <div class="cat-score" style="color:var(--good)">32 / 40</div>
+  </div>
+  <div class="bar-track"><div class="bar-fill green" style="width:80%"></div></div>
+
+  <div class="finding"><span class="tag pass">Pass</span>
+    <div class="finding-text"><strong>3-agent coordination through memory.</strong> Tracer writes hops → Analyst reads hops + writes analysis/patterns → Monitor reads dead ends + writes watchlist. All 3 agents share state exclusively through <code>getSibylMemory()</code>. This is the #1 thing judges look for and it's solid.</div>
+  </div>
+  <div class="finding"><span class="tag pass">Pass</span>
+    <div class="finding-text"><strong>5 memory collections.</strong> Cases, hops, patterns, watchlist, analysis — matches the spec exactly. Schemas in <code>schemas.ts</code> are well-typed.</div>
+  </div>
+  <div class="finding"><span class="tag pass">Pass</span>
+    <div class="finding-text"><strong>Growing pattern database.</strong> Analyst writes new patterns (<code>fund_splitting</code>, <code>rapid_movement</code>, <code>contract_interaction</code>, <code>bridge_usage</code>). <code>times_matched</code> increments on each hit. Seed API pre-populates 5 patterns for demo.</div>
+  </div>
+  <div class="finding"><span class="tag pass">Pass</span>
+    <div class="finding-text"><strong>Deletion test works.</strong> Clear button at <code>/memory</code> + global sidebar. Wipes localStorage + server memory. After clearing, agents have no patterns to match, no watchlists, no cross-case intel.</div>
+  </div>
+  <div class="finding"><span class="tag warn">Weak</span>
+    <div class="finding-text"><strong>No real Sibyl SDK.</strong> Memory is an in-memory Map (<code>sibyl.ts</code> Mode 1). The Python bridge (Mode 2) exists but requires manual setup. Judges might expect the actual <code>sibyl-memory-client</code> package. The adapter pattern is good, but "dual-mode" needs to actually connect to Sibyl in demo.</div>
+  </div>
+  <div class="finding"><span class="tag warn">Weak</span>
+    <div class="finding-text"><strong>Cross-session recall is fragile.</strong> In-memory store resets on every Lambda cold start. localStorage caching papers over this, but a judge refreshing the page on a cold Vercel instance will see empty memory. The bridge mode would fix this, but it's not the default.</div>
+  </div>
+  <div class="finding"><span class="tag warn">Weak</span>
+    <div class="finding-text"><strong>Deletion test is "soft."</strong> Clearing memory wipes data, but agents don't visibly fail — they just return empty results. The rubric says "investigation fails completely." A judge might want to see an error state or explicit "no patterns available" messaging when memory is gone.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="cat">
+  <div class="cat-header">
+    <div class="cat-title">Innovation · 25% of score</div>
+    <div class="cat-score" style="color:var(--good)">20 / 25</div>
+  </div>
+  <div class="bar-track"><div class="bar-fill green" style="width:80%"></div></div>
+
+  <div class="finding"><span class="tag pass">Pass</span>
+    <div class="finding-text"><strong>Novel concept.</strong> Onchain bounty hunting with coordinated agent memory is genuinely original. The "detective squad" framing is memorable and differentiating.</div>
+  </div>
+  <div class="finding"><span class="tag pass">Pass</span>
+    <div class="finding-text"><strong>Real chain data.</strong> Tracer reads actual Base mainnet transactions via Blockscout V2 API. Not mocked data — real wallet histories, real transaction hashes, real ETH amounts.</div>
+  </div>
+  <div class="finding"><span class="tag pass">Pass</span>
+    <div class="finding-text"><strong>Smart contract escrow.</strong> Full lifecycle: post → claim (with stake) → submit → approve/dispute → timeout auto-release. Not a toy contract.</div>
+  </div>
+  <div class="finding"><span class="tag info">Note</span>
+    <div class="finding-text"><strong>AI reasoning exists but is thin.</strong> Analyst uses OpenRouter/DeepSeek for summaries, but pattern matching is mostly rule-based (string checks for "mixer", "bridge", etc.). The AI layer adds polish but isn't the core intelligence. Judges who dig deep may notice.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="cat">
+  <div class="cat-header">
+    <div class="cat-title">Technical · 20% of score</div>
+    <div class="cat-score" style="color:var(--warn)">14 / 20</div>
+  </div>
+  <div class="bar-track"><div class="bar-fill yellow" style="width:70%"></div></div>
+
+  <div class="finding"><span class="tag pass">Pass</span>
+    <div class="finding-text"><strong>Clean architecture.</strong> Clear separation: <code>agents/</code>, <code>memory/</code>, <code>chain/</code>, <code>virtuals/</code>. Coordinator pattern is well-structured. TypeScript throughout.</div>
+  </div>
+  <div class="finding"><span class="tag pass">Pass</span>
+    <div class="finding-text"><strong>Full-stack delivery.</strong> Next.js App Router, API routes, SIWE auth, RainbowKit wallet, iron-session, polling for live updates. Deployed on Vercel.</div>
+  </div>
+  <div class="finding"><span class="tag pass">Pass</span>
+    <div class="finding-text"><strong>Solidity contract.</strong> <code>BountyContract.sol</code> has escrow, staking, dispute, timeout — real contract logic, not a stub.</div>
+  </div>
+  <div class="finding"><span class="tag warn">Weak</span>
+    <div class="finding-text"><strong>Contract not deployed (or address not set).</strong> <code>NEXT_PUBLIC_BOUNTY_CONTRACT</code> reads from env, but the bounty flow falls back silently when it's empty. Judges clicking "Post Bounty" won't see a real Base tx on Basescan.</div>
+  </div>
+  <div class="finding"><span class="tag warn">Weak</span>
+    <div class="finding-text"><strong>README says SSE but code uses polling.</strong> Architecture diagram says "SSE + REST API" but commit <code>090ed17</code> replaced SSE with polling. Judges read READMEs.</div>
+  </div>
+  <div class="finding"><span class="tag warn">Weak</span>
+    <div class="finding-text"><strong>No tests.</strong> Zero test files. Even one integration test showing the Tracer→Analyst→Monitor pipeline through memory would demonstrate rigor.</div>
+  </div>
+  <div class="finding"><span class="tag fail">Gap</span>
+    <div class="finding-text"><strong>No fund flow graph.</strong> The spec calls for a "visual fund flow graph — nodes are wallets, edges are transactions, color-coded by risk." The case page has a hop table but no graph visualization. This is a standout UI element the rubric explicitly names.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="cat">
+  <div class="cat-header">
+    <div class="cat-title">Pitch · 15% of score</div>
+    <div class="cat-score" style="color:var(--crit)">0 / 15</div>
+  </div>
+  <div class="bar-track"><div class="bar-fill red" style="width:0%"></div></div>
+
+  <div class="finding"><span class="tag fail">Missing</span>
+    <div class="finding-text"><strong>No demo video.</strong> The rubric requires a 2–5 minute video. This is 15% of the total score — zero points until it exists.</div>
+  </div>
+  <div class="finding"><span class="tag fail">Missing</span>
+    <div class="finding-text"><strong>No public posts.</strong> Rubric requires 2 public posts tagging @sibylcap, @base, @virtaboreal. Zero points on this requirement.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="cat">
+  <div class="cat-header">
+    <div class="cat-title">Product-Market Fit · bonus 10 pts</div>
+    <div class="cat-score" style="color:var(--good)">7 / 10</div>
+  </div>
+  <div class="bar-track"><div class="bar-fill green" style="width:70%"></div></div>
+
+  <div class="finding"><span class="tag pass">Pass</span>
+    <div class="finding-text"><strong>Real problem.</strong> Crypto theft is $3B+/year. Current investigation is manual, expensive, and siloed. The "learning from past cases" angle is a genuine moat argument.</div>
+  </div>
+  <div class="finding"><span class="tag info">Note</span>
+    <div class="finding-text"><strong>Business model is implicit.</strong> Bounty escrow takes no protocol fee. For PMF to score higher, show how this becomes a sustainable service (% fee, subscription, etc.).</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="cat">
+  <div class="cat-header">
+    <div class="cat-title">Partner Multiplier · ×1.25</div>
+    <div class="cat-score" style="color:var(--warn)">×1.25 at risk</div>
+  </div>
+  <div class="bar-track"><div class="bar-fill yellow" style="width:60%"></div></div>
+
+  <div class="finding"><span class="tag pass">Pass</span>
+    <div class="finding-text"><strong>Base integration is real.</strong> Reads mainnet chain data via Blockscout. Contract ABI targets Base Sepolia. Bounty writer interacts with Base Sepolia. Fund tracing happens on Base.</div>
+  </div>
+  <div class="finding"><span class="tag warn">Weak</span>
+    <div class="finding-text"><strong>Virtuals ACP is code-only.</strong> <code>acp.ts</code> defines offerings and has registration/job logic, but the SDK uses lazy loading with a fallback that logs "ACP unavailable." No evidence agents are actually registered on Virtuals. Judges are told: "Don't just import the package — register agents, use ACP that judges can verify."</div>
+  </div>
+  <div class="finding"><span class="tag warn">Weak</span>
+    <div class="finding-text"><strong>Contract may not be deployed on-chain.</strong> If <code>NEXT_PUBLIC_BOUNTY_CONTRACT</code> is empty or points to an unverified address, judges can't confirm Base usage via Basescan. Deploy + verify is needed for the multiplier.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+
+<h2>Priority Actions (7 days left)</h2>
+
+<div class="actions">
+  <div class="action critical">
+    <span class="action-label">P0</span>
+    <div><strong>Record the demo video (2–5 min).</strong> This is 15 points you're leaving on the table. Follow the 6-beat script from the build prompt: setup → investigation → monitor → memory payoff → deletion test → onchain proof. Without this, your ceiling is ~77 raw (96 with multiplier).</div>
+  </div>
+
+  <div class="action critical">
+    <span class="action-label">P0</span>
+    <div><strong>Deploy BountyContract.sol to Base Sepolia + verify on Basescan.</strong> Run <code>npx hardhat run scripts/deploy.ts --network base-sepolia</code>, verify the contract, set <code>NEXT_PUBLIC_BOUNTY_CONTRACT</code> in Vercel env vars. Without a verifiable contract, the Base multiplier is shaky and the "onchain proof" demo beat falls apart.</div>
+  </div>
+
+  <div class="action critical">
+    <span class="action-label">P0</span>
+    <div><strong>Make 2 public posts.</strong> Twitter/X tagging @sibylcap, @base, @virtaboreal. This is a hard requirement — missing it could disqualify or cost easy points.</div>
+  </div>
+
+  <div class="action important">
+    <span class="action-label">P1</span>
+    <div><strong>Connect to real Sibyl Memory.</strong> The in-memory store works, but judges may expect the actual <code>sibyl-memory-client</code>. At minimum, run the Python bridge in production so memory persists across cold starts. Set <code>SIBYL_BRIDGE_URL</code> in Vercel or deploy the bridge alongside.</div>
+  </div>
+
+  <div class="action important">
+    <span class="action-label">P1</span>
+    <div><strong>Make the deletion test dramatic.</strong> When memory is empty, agents should show visible degradation: "⚠ No pattern database — skipping pattern matching", "⚠ No watchlist — cannot monitor dormant wallets." The investigation should feel broken, not just empty. The build prompt literally says: "DELETE THE MEMORY → agents can't share findings → investigation fails."</div>
+  </div>
+
+  <div class="action important">
+    <span class="action-label">P1</span>
+    <div><strong>Make Virtuals verifiable.</strong> Either register agents on Virtuals testnet so judges can look them up, or show ACP job acceptance in the demo video. Current code has the integration written but no evidence it's live. The ×1.25 multiplier is worth ~18 points — a shaky Virtuals story could drop it to ×1.15 (Base only).</div>
+  </div>
+
+  <div class="action important">
+    <span class="action-label">P1</span>
+    <div><strong>Build the fund flow graph.</strong> The spec explicitly calls for "visual fund flow graph — nodes are wallets, edges are transactions, color-coded by risk." A simple SVG/Canvas graph on the case page would be a high-visibility win for both Technical and Pitch scores.</div>
+  </div>
+
+  <div class="action nice">
+    <span class="action-label">P2</span>
+    <div><strong>Fix README inconsistency.</strong> Change "SSE + REST API" to "Polling + REST API" in the architecture diagram. Small but judges notice when docs don't match code.</div>
+  </div>
+
+  <div class="action nice">
+    <span class="action-label">P2</span>
+    <div><strong>Rotate exposed keys.</strong> The private key and OpenRouter key visible in <code>.env.local</code> should be rotated after the hackathon. Ensure <code>.env.local</code> is in <code>.gitignore</code>.</div>
+  </div>
+
+  <div class="action nice">
+    <span class="action-label">P2</span>
+    <div><strong>Add one integration test.</strong> A single test that runs the Coordinator pipeline with mock chain data and asserts memory was written/read correctly. Shows judges the architecture works, not just the UI.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+
+<div class="bottom-line">
+  <h2 style="font-size:17px;">Bottom Line</h2>
+  <p style="font-size:14px; margin: 0 0 12px;">
+    The <strong>core architecture is strong</strong> — 3-agent coordination through shared memory, real chain data, real smart contract, clean code. You're competitive on Memory (32/40) and Innovation (20/25). But three things are holding the score down:
+  </p>
+  <ul>
+    <li><strong>No demo video</strong> — 15 free points sitting on the table</li>
+    <li><strong>No deployed contract</strong> — undermines both Technical score and the ×1.25 multiplier</li>
+    <li><strong>Virtuals integration is code-only</strong> — risks dropping to ×1.15</li>
+  </ul>
+  <p style="font-size:14px; margin: 12px 0 0;">
+    <strong>If you fix P0s + P1s, realistic ceiling is ~105–110.</strong> That's top-3 territory. The code is 70% there — the remaining 30% is deployment, demo, and polish. You have 7 days.
+  </p>
+</div>
