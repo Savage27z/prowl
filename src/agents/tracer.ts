@@ -44,21 +44,21 @@ export class TracerAgent {
     }
 
     // Determine where to start tracing:
-    // If tx.to IS the victim, the incident tx sent funds TO the victim — the real
-    // drain happens via outgoing txs FROM the victim (internal txs / contract calls).
-    // If tx.from IS the victim, the victim sent funds out — trace from tx.to (the thief).
-    // Otherwise, trace from tx.to as default.
+    // The goal is to follow the stolen funds FORWARD from the thief.
+    // If tx.from IS the victim — victim sent funds out, trace from tx.to (the thief/recipient).
+    // If tx.to IS the victim — someone sent funds to victim, trace from tx.from (the sender).
+    // Otherwise — trace from tx.to as default.
     let traceStartAddress: string;
     let traceStartAmount: string;
 
     const victimLower = victimWallet.toLowerCase();
-    if (tx.to.toLowerCase() === victimLower) {
-      // Incident tx goes TO victim — trace the victim's outgoing txs to find the drain
-      traceStartAddress = victimWallet;
-      traceStartAmount = tx.value;
-    } else if (tx.from.toLowerCase() === victimLower) {
+    if (tx.from.toLowerCase() === victimLower) {
       // Victim sent funds — trace from the recipient (the thief)
       traceStartAddress = tx.to;
+      traceStartAmount = tx.value;
+    } else if (tx.to.toLowerCase() === victimLower) {
+      // Someone sent funds TO victim — trace back from the sender
+      traceStartAddress = tx.from;
       traceStartAmount = tx.value;
     } else {
       // Neither — trace from tx.to
