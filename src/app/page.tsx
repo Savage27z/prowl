@@ -512,6 +512,70 @@ export default function Home() {
         </StaggerReveal>
       </section>
 
+      {/* ════════ ECONOMICS ════════ */}
+      <section style={{
+        background: 'var(--color-bg)', borderRadius: 'var(--radius-lg)', marginTop: 12,
+        padding: 'clamp(52px,5vw,88px) clamp(20px,3vw,44px)',
+      }}>
+        <Reveal variant="fade-up">
+          <Eyebrow>Protocol economics</Eyebrow>
+          <h2 style={{
+            fontSize: 'clamp(36px,4.2vw,58px)', fontWeight: 400, lineHeight: 0.98,
+            letterSpacing: '-0.025em', margin: 'var(--space-3) 0 0',
+            fontFamily: 'var(--font-heading)',
+          }}>
+            <ScrollClipReveal>Sustainable by</ScrollClipReveal>
+            <ScrollClipReveal delay={0.12}>design</ScrollClipReveal>
+          </h2>
+          <p style={{
+            fontSize: 14, color: 'var(--color-neutral-700)', maxWidth: '52ch',
+            marginTop: 'var(--space-4)', textAlign: 'justify', hyphens: 'auto',
+          }}>
+            Every solved bounty generates protocol revenue. The 5% fee funds ongoing development, agent infrastructure, and the pattern database that makes every future investigation faster.
+          </p>
+        </Reveal>
+
+        <StaggerReveal stagger={0.1} style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: 20, margin: 'clamp(32px,3vw,52px) 0 0',
+        }}>
+          {[
+            { head: '5%', body: 'Protocol fee on solved bounties — deducted at payout, enforced onchain by the escrow contract' },
+            { head: '95%', body: 'Goes to the investigating agent — aligned incentives mean better investigations' },
+            { head: '0%', body: 'Fee on unsolved cases — victims pay nothing if the trail goes cold' },
+          ].map((item) => (
+            <Reveal key={item.head} variant="fade-up" style={{
+              borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)',
+              background: 'var(--color-card)', padding: 'var(--space-4)',
+            }}>
+              <div style={{
+                fontFamily: 'var(--font-heading)', fontSize: 'clamp(36px,3.6vw,48px)',
+                letterSpacing: '-0.02em', lineHeight: 1,
+              }}>
+                {item.head}
+              </div>
+              <p style={{ fontSize: 13, color: 'var(--color-neutral-700)', marginTop: 10, lineHeight: 1.6 }}>
+                {item.body}
+              </p>
+            </Reveal>
+          ))}
+        </StaggerReveal>
+
+        <Reveal variant="fade-up" style={{ marginTop: 'clamp(28px,3vw,44px)' }}>
+          <div style={{
+            borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)',
+            background: 'var(--color-neutral-100)', padding: 'var(--space-4)',
+          }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '9.5px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--color-neutral-600)', marginBottom: 8 }}>
+              Revenue model
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--color-neutral-700)', margin: 0, lineHeight: 1.7 }}>
+              Prowl captures value at the resolution layer: victims lock bounties, agents investigate, and the protocol takes a 5% cut only when the case is solved and the poster approves the report. No subscription, no upfront cost — the protocol earns when its agents deliver. At scale, cross-case pattern memory creates a compounding advantage: each solved case trains the swarm, improving solve rates and reducing investigation time — a flywheel that increases throughput without increasing cost per case.
+            </p>
+          </div>
+        </Reveal>
+      </section>
+
       {/* ════════ FOOTER ════════ */}
       <footer id="contact" style={{
         background: 'var(--color-surface)', color: 'var(--color-neutral-700)',

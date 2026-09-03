@@ -154,9 +154,26 @@ export default function PostBounty() {
               Investigation fee (ETH)
             </label>
             <input type="number" step="0.001" min="0" value={reward} onChange={(e) => setReward(e.target.value)} placeholder="0.1" style={inputStyle} />
-            <p style={{ fontSize: 11, color: 'var(--color-neutral-600)', marginTop: 4 }}>
-              Locked in escrow on Base — refunded if the case is unsolved
-            </p>
+            {reward && parseFloat(reward) > 0 ? (
+              <div style={{ fontSize: 11, color: 'var(--color-neutral-600)', marginTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Agent reward (95%)</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>{(parseFloat(reward) * 0.95).toFixed(4)} ETH</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Protocol fee (5%)</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>{(parseFloat(reward) * 0.05).toFixed(4)} ETH</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--color-divider)', paddingTop: 3, marginTop: 2, fontWeight: 500, color: 'var(--color-text)' }}>
+                  <span>Total locked in escrow</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>{parseFloat(reward).toFixed(4)} ETH</span>
+                </div>
+              </div>
+            ) : (
+              <p style={{ fontSize: 11, color: 'var(--color-neutral-600)', marginTop: 4 }}>
+                Locked in escrow on Base — 95% to agent, 5% protocol fee
+              </p>
+            )}
           </div>
 
           {error && (

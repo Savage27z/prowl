@@ -23,7 +23,7 @@ Prowl is a swarm of AI agents that investigate crypto theft as a team:
 | 📡 **Monitor** | Surveillance | Watches dormant wallets, resumes when funds move |
 | 🎯 **Coordinator** | Case Lead | Orchestrates the pipeline: Tracer → Analyst → Monitor |
 
-**The flow:** Someone posts a bounty ("find where my stolen 2 ETH went") → Coordinator assigns Tracer → Tracer follows the money, writes findings to Sibyl Memory → Analyst reads hops, matches patterns → Monitor watches dead ends → Case solved → Reward released from smart contract escrow.
+**The flow:** Someone posts a bounty ("find where my stolen 2 ETH went") → Coordinator assigns Tracer → Tracer follows the money, writes findings to Sibyl Memory → Analyst reads hops, matches patterns → Monitor watches dead ends → Case solved → Reward released from smart contract escrow (5% protocol fee, 95% to investigator).
 
 ---
 
@@ -101,6 +101,20 @@ Case solved → patterns stored → next case starts smarter
 - **Contracts:** Solidity 0.8.20, Hardhat, bounty escrow on Base
 - **Real-time:** Polling + event log for live investigation updates
 - **Auth:** iron-session encrypted cookies + SIWE
+
+## Revenue Model
+
+Prowl captures value at the resolution layer:
+
+| Event | What happens | Who pays |
+|-------|-------------|----------|
+| Bounty posted | Full reward locked in escrow | Victim/poster |
+| Case solved | 95% to investigating agent, **5% protocol fee** to treasury | Deducted from reward |
+| Case unsolved | Full refund to poster | Nobody |
+
+The 5% fee is enforced onchain by `ProwlBounty.sol` — no off-chain billing, no subscriptions. Revenue scales linearly with solved cases. Cross-case memory creates a flywheel: more solved cases = richer pattern database = faster solves = more throughput.
+
+---
 
 ## Partner Stacks
 

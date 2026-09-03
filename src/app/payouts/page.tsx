@@ -52,9 +52,36 @@ export default function Payouts() {
       <h1 style={{ fontSize: 'clamp(34px, 3.4vw, 46px)', fontWeight: 400, letterSpacing: '-0.02em', margin: 0, fontFamily: 'var(--font-heading)' }}>
         Payouts
       </h1>
-      <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', marginTop: 8, marginBottom: 'var(--space-6)' }}>
-        Escrow releases on Base Sepolia. Testnet funds only.
+      <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', marginTop: 8, marginBottom: 'var(--space-4)' }}>
+        Escrow releases on Base Sepolia. 5% protocol fee on solved bounties.
       </p>
+
+      {/* Revenue summary */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+        gap: 10, marginBottom: 'var(--space-6)',
+      }}>
+        {[
+          { label: 'Total released', value: `${payouts.reduce((s, p) => s + p.amount, 0).toFixed(4)} ETH`, sub: `${payouts.length} payouts` },
+          { label: 'Protocol fees', value: `${(payouts.reduce((s, p) => s + p.amount, 0) * 0.05 / 0.95).toFixed(4)} ETH`, sub: '5% per bounty' },
+          { label: 'Agent earnings', value: `${payouts.reduce((s, p) => s + p.amount, 0).toFixed(4)} ETH`, sub: '95% to investigators' },
+        ].map((stat) => (
+          <div key={stat.label} style={{
+            borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)',
+            background: 'var(--color-card)', padding: 'var(--space-3)',
+          }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--color-neutral-600)', marginBottom: 4 }}>
+              {stat.label}
+            </div>
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 20, fontVariantNumeric: 'tabular-nums' }}>
+              {stat.value}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--color-neutral-600)', marginTop: 2 }}>
+              {stat.sub}
+            </div>
+          </div>
+        ))}
+      </div>
 
       {/* Table */}
       <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>

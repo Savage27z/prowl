@@ -26,6 +26,9 @@ contract ProwlBounty {
     uint256 public openBountyCount;
     uint256 public constant MIN_STAKE = 0.001 ether;
     uint256 public constant TIMEOUT_PERIOD = 7 days;
+    uint256 public constant PROTOCOL_FEE_BPS = 500;  // 5% fee in basis points
+    address public immutable treasury;                 // Protocol treasury
+    uint256 public totalFeesCollected;                 // Cumulative protocol revenue
 
     /// @dev Simple reentrancy lock
     uint256 private _locked = 1;
@@ -44,8 +47,14 @@ contract ProwlBounty {
     event BountyClaimed(uint256 indexed bountyId, address indexed agent);
     event ReportSubmitted(uint256 indexed bountyId, bytes32 reportHash);
     event PayoutReleased(uint256 indexed bountyId, address indexed agent, uint256 amount);
+    event ProtocolFeeCollected(uint256 indexed bountyId, uint256 fee);
     event BountyDisputed(uint256 indexed bountyId);
     event BountyExpired(uint256 indexed bountyId);
+
+    constructor(address _treasury) {
+        require(_treasury != address(0), "Invalid treasury");
+        treasury = _treasury;
+    }
 
     /// @notice Post a new bounty with ETH reward locked in escrow
     /// @param walletAddress The victim's wallet address to investigate
@@ -114,6 +123,7 @@ contract ProwlBounty {
     }
 
     /// @notice Bounty poster approves the report and releases reward
+    /// @dev Deducts 5% protocol fee from reward, sends remainder + stake to agent
     function approvePayout(uint256 bountyId) external nonReentrant {
         Bounty storage bounty = bounties[bountyId];
         require(bounty.status == Status.Submitted, "Report not submitted");
@@ -124,15 +134,27 @@ contract ProwlBounty {
         address agent = bounty.claimedBy;
         uint256 stake = agentStakes[agent];
 
+        // Calculate protocol fee (5% of reward)
+        uint256 fee = (reward * PROTOCOL_FEE_BPS) / 10000;
+        uint256 agentReward = reward - fee;
+
         // Effects before interaction (checks-effects-interactions)
         agentStakes[agent] = 0;
-        uint256 totalPayout = reward + stake;
+        totalFeesCollected += fee;
+        uint256 totalPayout = agentReward + stake;
 
-        // Interaction
+        // Interaction — pay agent
         (bool success, ) = payable(agent).call{value: totalPayout}("");
         require(success, "Payout failed");
 
-        emit PayoutReleased(bountyId, agent, reward);
+        // Interaction — pay treasury
+        if (fee > 0) {
+            (bool feeSuccess, ) = payable(treasury).call{value: fee}("");
+            require(feeSuccess, "Fee transfer failed");
+            emit ProtocolFeeCollected(bountyId, fee);
+        }
+
+        emit PayoutReleased(bountyId, agent, agentReward);
     }
 
     /// @notice Bounty poster disputes the report
@@ -146,6 +168,7 @@ contract ProwlBounty {
     }
 
     /// @notice Auto-approve after timeout (7 days with no response from poster)
+    /// @dev Same 5% protocol fee applies on timeout resolution
     function resolveTimeout(uint256 bountyId) external nonReentrant {
         Bounty storage bounty = bounties[bountyId];
         require(bounty.status == Status.Submitted, "Report not submitted");
@@ -159,15 +182,27 @@ contract ProwlBounty {
         address agent = bounty.claimedBy;
         uint256 stake = agentStakes[agent];
 
+        // Calculate protocol fee
+        uint256 fee = (reward * PROTOCOL_FEE_BPS) / 10000;
+        uint256 agentReward = reward - fee;
+
         // Effects before interaction
         agentStakes[agent] = 0;
-        uint256 totalPayout = reward + stake;
+        totalFeesCollected += fee;
+        uint256 totalPayout = agentReward + stake;
 
-        // Interaction
+        // Interaction — pay agent
         (bool success, ) = payable(agent).call{value: totalPayout}("");
         require(success, "Payout failed");
 
-        emit PayoutReleased(bountyId, agent, reward);
+        // Interaction — pay treasury
+        if (fee > 0) {
+            (bool feeSuccess, ) = payable(treasury).call{value: fee}("");
+            require(feeSuccess, "Fee transfer failed");
+            emit ProtocolFeeCollected(bountyId, fee);
+        }
+
+        emit PayoutReleased(bountyId, agent, agentReward);
     }
 
     /// @notice Get bounty details
