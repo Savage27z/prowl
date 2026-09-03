@@ -24,6 +24,7 @@ export class TracerAgent {
   private maxTotalHops = 25;     // hard cap across ALL branches
   private totalHopsTraced = 0;   // global counter
   private traceDeadline = 0;     // timestamp ceiling (25s)
+  private excludeHashes = new Set<string>(); // tx hashes to skip (prevent loops)
 
   // Start tracing from an incident transaction
   async startTrace(caseId: string, incidentTxHash: string, victimWallet: string): Promise<TraceResult> {
@@ -69,6 +70,8 @@ export class TracerAgent {
     // Reset per-investigation limits
     this.totalHopsTraced = 0;
     this.traceDeadline = Date.now() + 25_000; // 25s hard ceiling
+    // Exclude the incident tx itself to prevent circular tracing
+    this.excludeHashes = new Set([incidentTxHash.toLowerCase()]);
 
     // Trace the main branch
     const hops = await this.traceFromAddress(
@@ -132,8 +135,8 @@ export class TracerAgent {
     // Check if this is a contract
     const isContractAddr = await chain.isContract(address);
 
-    // Get ALL outgoing transactions (regular + internal/contract calls)
-    const outgoingTxs = await chain.getAllOutgoingTransactions(address);
+    // Get ALL outgoing transactions (regular + internal + token transfers)
+    const outgoingTxs = await chain.getAllOutgoingTransactions(address, 0, this.excludeHashes);
 
     if (outgoingTxs.length === 0) {
       // Dead end — funds sitting in this wallet
@@ -219,6 +222,7 @@ export class TracerAgent {
 
       hops.push(hop);
       this.totalHopsTraced++;
+      this.excludeHashes.add(tx.hash.toLowerCase());
       await this.writeHop(hop);
 
       // Recursively trace the next hop

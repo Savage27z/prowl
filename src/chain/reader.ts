@@ -132,7 +132,7 @@ export class ChainReader {
 
   // Get ALL outgoing transactions (regular + internal) via Blockscout V2
   // Runs sequentially to avoid rate limits on serverless
-  async getAllOutgoingTransactions(address: string, _startBlock = 0): Promise<Transaction[]> {
+  async getAllOutgoingTransactions(address: string, _startBlock = 0, excludeHashes?: Set<string>): Promise<Transaction[]> {
     const allTxs: Transaction[] = [];
 
     // 1. Regular outgoing transactions
@@ -161,12 +161,44 @@ export class ChainReader {
       console.error(`[ChainReader] V2 internal txs error:`, err);
     }
 
-    // Deduplicate by tx hash + recipient + value, keep only value > 0
+    // 3. Token transfers FROM this address (ERC-20 drains via approve/transferFrom)
+    try {
+      console.log(`[ChainReader] V2: Fetching token transfers from ${address}`);
+      const data = await this.fetchV2(`/addresses/${address}/token-transfers?filter=from&type=ERC-20`);
+      const items = (data.items || []) as Record<string, unknown>[];
+      console.log(`[ChainReader] V2: ${items.length} token transfers`);
+      for (const item of items) {
+        const from = item.from as Record<string, string> | null;
+        const to = item.to as Record<string, string> | null;
+        const total = item.total as Record<string, string> | null;
+        const token = item.token as Record<string, unknown> | null;
+        const decimals = parseInt(String(token?.decimals || '18'), 10);
+        const rawValue = total?.value || '0';
+        // Convert token amount to a readable decimal string
+        const tokenValue = (Number(BigInt(rawValue)) / Math.pow(10, decimals)).toFixed(6);
+        allTxs.push({
+          hash: ((item.tx_hash || item.transaction_hash || '') as string),
+          from: from?.hash || '',
+          to: to?.hash || '',
+          value: tokenValue,
+          timestamp: (item.timestamp || new Date().toISOString()) as string,
+          blockNumber: (item.block_number || 0) as number,
+          gasUsed: '0',
+          input: '0x',
+          isError: false,
+        });
+      }
+    } catch (err) {
+      console.error(`[ChainReader] V2 token transfers error:`, err);
+    }
+
+    // Deduplicate by tx hash + recipient, exclude specified hashes
     const seen = new Set<string>();
     const merged: Transaction[] = [];
     for (const tx of allTxs) {
-      const key = `${tx.hash}-${tx.to}-${tx.value}`;
-      if (!seen.has(key) && parseFloat(tx.value) > 0) {
+      if (excludeHashes?.has(tx.hash.toLowerCase())) continue;
+      const key = `${tx.hash}-${tx.to}`;
+      if (!seen.has(key) && parseFloat(tx.value) >= 0) {
         seen.add(key);
         merged.push(tx);
       }
@@ -174,7 +206,7 @@ export class ChainReader {
 
     // Sort by value descending (follow the money)
     merged.sort((a, b) => parseFloat(b.value) - parseFloat(a.value));
-    console.log(`[ChainReader] V2: ${merged.length} merged outgoing txs with value > 0`);
+    console.log(`[ChainReader] V2: ${merged.length} merged outgoing txs`);
     return merged;
   }
 
