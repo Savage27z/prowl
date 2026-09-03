@@ -181,8 +181,20 @@ export class TracerAgent {
     const sorted = [...outgoingTxs].sort((a, b) => parseFloat(b.value) - parseFloat(a.value));
     const isSplit = sorted.length > 1;
 
-    // Take top branches by value
-    const branchesToTrace = sorted.slice(0, this.maxBranches);
+    // AI-powered branch prioritization — when there are many branches,
+    // ask the AI which ones look most suspicious to trace first
+    let branchesToTrace = sorted.slice(0, this.maxBranches);
+    if (sorted.length > 3) {
+      const aiPriority = await this.aiBranchPriority(address, sorted.slice(0, 8), isContractAddr);
+      if (aiPriority.length > 0) {
+        // Re-order: AI-prioritized addresses first, then by value
+        const prioritized = aiPriority
+          .map(addr => sorted.find(tx => tx.to.toLowerCase() === addr.toLowerCase()))
+          .filter((tx): tx is NonNullable<typeof tx> => tx != null);
+        const rest = sorted.filter(tx => !aiPriority.includes(tx.to.toLowerCase()));
+        branchesToTrace = [...prioritized, ...rest].slice(0, this.maxBranches);
+      }
+    }
 
     for (let i = 0; i < branchesToTrace.length; i++) {
       // Check limits before each branch
@@ -253,6 +265,39 @@ export class TracerAgent {
     const summary = await this.generateSummary(caseId, hops, status);
 
     return { hops, status, summary };
+  }
+
+  // AI-powered branch prioritization — picks which outgoing addresses
+  // look most suspicious when funds split to multiple destinations
+  private async aiBranchPriority(
+    fromAddress: string,
+    candidates: { to: string; value: string; hash: string; timestamp: string }[],
+    isContract: boolean
+  ): Promise<string[]> {
+    try {
+      const candidateList = candidates.map((tx, i) =>
+        `${i + 1}. → ${tx.to} (${tx.value} ETH, ${tx.timestamp})`
+      ).join('\n');
+
+      const prompt = `You are tracing stolen crypto. Funds from ${fromAddress}${isContract ? ' (a smart contract)' : ''} were sent to ${candidates.length} addresses. Which ones are most likely part of the theft trail?
+
+${candidateList}
+
+Rank the top 3 most suspicious destinations by address. Respond with EXACTLY a JSON array of addresses (no markdown):
+["0x...", "0x...", "0x..."]
+
+Prioritize: large value transfers, round numbers, rapid timing, contract interactions, addresses that look like intermediaries rather than end users.`;
+
+      const raw = await callAI(prompt, { maxTokens: 200, temperature: 0.2 });
+      const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const parsed = JSON.parse(cleaned);
+      if (Array.isArray(parsed)) {
+        return parsed.map((a: string) => a.toLowerCase()).slice(0, 3);
+      }
+      return [];
+    } catch {
+      return []; // Fallback to value-based sorting
+    }
   }
 
   // Write hop to Sibyl Memory (L45 — referenced in README)

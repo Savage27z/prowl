@@ -161,15 +161,28 @@ export class AnalystAgent {
       }
     }
 
-    // Determine risk level
+    // ── AI Threat Assessment ────────────────────────────────────────
+    // Let the AI model evaluate the hop context and provide a threat
+    // classification that feeds into the risk score. This makes AI
+    // reasoning load-bearing in the analysis, not just summary polish.
+    const aiThreat = await this.aiThreatAssessment(hop, notes, patternMatches, similarCases, isContract);
+    if (aiThreat.riskBoost) {
+      if (aiThreat.riskBoost === 'high') riskLevel = 'high';
+      else if (aiThreat.riskBoost === 'medium' && riskLevel === 'low') riskLevel = 'medium';
+    }
+    if (aiThreat.insight) {
+      notes.push(`AI assessment: ${aiThreat.insight}`);
+    }
+
+    // Determine risk level from rule-based evidence
     if (patternMatches.length >= 3 || similarCases.length >= 2) {
       riskLevel = 'high';
     } else if (patternMatches.length >= 1 || similarCases.length >= 1) {
-      riskLevel = 'medium';
+      if (riskLevel === 'low') riskLevel = 'medium';
     }
 
     if (hop.flagged && hop.flag_reason?.includes('Dead end')) {
-      riskLevel = 'medium';
+      if (riskLevel === 'low') riskLevel = 'medium';
       notes.push('Funds sitting idle — possible laundering cooldown');
     }
 
@@ -179,7 +192,8 @@ export class AnalystAgent {
       0.3 +
         patternMatches.length * 0.15 +
         similarCases.length * 0.2 +
-        (isContract ? 0.1 : 0)
+        (isContract ? 0.1 : 0) +
+        (aiThreat.confidenceBoost || 0)
     );
 
     return {
@@ -192,6 +206,56 @@ export class AnalystAgent {
       notes: notes.join('. ') || 'No significant patterns detected.',
       confidence,
     };
+  }
+
+  // AI-powered threat assessment — evaluates hop context with LLM reasoning
+  // This makes AI load-bearing: it can elevate risk levels and add insights
+  // that the rule-based engine can't detect (unusual timing, behavioral patterns)
+  private async aiThreatAssessment(
+    hop: Hop,
+    existingNotes: string[],
+    patternMatches: string[],
+    similarCases: string[],
+    isContract: boolean
+  ): Promise<{ riskBoost: 'high' | 'medium' | null; insight: string | null; confidenceBoost: number }> {
+    try {
+      const prompt = `You are a crypto forensic analyst. Evaluate this fund movement for suspicious activity.
+
+Hop #${hop.hop_number} in case ${hop.case_id}:
+- From: ${hop.from_address}
+- To: ${hop.to_address}
+- Amount: ${hop.amount} ETH
+- Timestamp: ${hop.timestamp}
+- Is split transaction: ${hop.is_split}
+- Is contract: ${isContract}
+- Flag: ${hop.flag_reason || 'none'}
+- Pattern matches so far: ${patternMatches.length}
+- Cross-case hits: ${similarCases.length}
+- Current evidence: ${existingNotes.join('; ') || 'none'}
+
+Respond with EXACTLY this JSON format (no markdown, no explanation):
+{"risk":"high"|"medium"|"low","insight":"one sentence threat assessment","confidence":0.0-0.2}
+
+Rules:
+- "risk": your independent assessment — "high" for likely laundering/theft, "medium" for suspicious, "low" for benign
+- "insight": one specific sentence about what you see (behavioral pattern, timing anomaly, structural red flag)
+- "confidence": how much to boost the confidence score (0.0 to 0.2)`;
+
+      const raw = await callAI(prompt, { maxTokens: 150, temperature: 0.2 });
+
+      // Parse the AI response
+      const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const parsed = JSON.parse(cleaned);
+
+      return {
+        riskBoost: parsed.risk === 'high' ? 'high' : parsed.risk === 'medium' ? 'medium' : null,
+        insight: typeof parsed.insight === 'string' ? parsed.insight : null,
+        confidenceBoost: typeof parsed.confidence === 'number' ? Math.min(0.2, Math.max(0, parsed.confidence)) : 0,
+      };
+    } catch {
+      // AI unavailable — fall back silently, rule-based analysis still works
+      return { riskBoost: null, insight: null, confidenceBoost: 0 };
+    }
   }
 
   // Detect patterns across all hops in a case
