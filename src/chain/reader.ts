@@ -130,12 +130,49 @@ export class ChainReader {
     };
   }
 
-  // Get ALL outgoing transactions (regular + internal) via Blockscout V2
-  // Runs sequentially to avoid rate limits on serverless
+  // Fetch outgoing txs via Blockscout V1 API (legacy, more reliable for some addresses)
+  private async fetchV1Txs(address: string): Promise<Transaction[]> {
+    const txs: Transaction[] = [];
+    try {
+      console.log(`[ChainReader] V1 fallback: Fetching txs for ${address}`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      const response = await fetch(
+        `${EXPLORER_API}?module=account&action=txlist&address=${address}&sort=desc&page=1&offset=50`,
+        { signal: controller.signal }
+      );
+      clearTimeout(timeout);
+      const data = await response.json();
+      const results = (data.result || []) as Record<string, string>[];
+      console.log(`[ChainReader] V1: ${results.length} total txs`);
+      for (const tx of results) {
+        // Only outgoing (from this address)
+        if (tx.from?.toLowerCase() !== address.toLowerCase()) continue;
+        txs.push({
+          hash: tx.hash || '',
+          from: tx.from || '',
+          to: tx.to || '',
+          value: this.weiToEth('0x' + BigInt(tx.value || '0').toString(16)),
+          timestamp: tx.timeStamp ? new Date(parseInt(tx.timeStamp, 10) * 1000).toISOString() : '',
+          blockNumber: parseInt(tx.blockNumber || '0', 10),
+          gasUsed: tx.gasUsed || '0',
+          input: tx.input || '0x',
+          isError: tx.isError === '1',
+        });
+      }
+    } catch (err) {
+      console.error(`[ChainReader] V1 fallback error:`, err);
+    }
+    return txs;
+  }
+
+  // Get ALL outgoing transactions (regular + internal + token transfers)
+  // Tries V2 first, falls back to V1 if V2 returns nothing
   async getAllOutgoingTransactions(address: string, _startBlock = 0, excludeHashes?: Set<string>): Promise<Transaction[]> {
     const allTxs: Transaction[] = [];
+    let v2Failed = false;
 
-    // 1. Regular outgoing transactions
+    // 1. Regular outgoing transactions (V2)
     try {
       console.log(`[ChainReader] V2: Fetching regular txs from ${address}`);
       const data = await this.fetchV2(`/addresses/${address}/transactions?filter=from`);
@@ -146,9 +183,10 @@ export class ChainReader {
       }
     } catch (err) {
       console.error(`[ChainReader] V2 regular txs error:`, err);
+      v2Failed = true;
     }
 
-    // 2. Internal outgoing transactions (contract call drains)
+    // 2. Internal outgoing transactions (V2)
     try {
       console.log(`[ChainReader] V2: Fetching internal txs from ${address}`);
       const data = await this.fetchV2(`/addresses/${address}/internal-transactions?filter=from`);
@@ -159,9 +197,10 @@ export class ChainReader {
       }
     } catch (err) {
       console.error(`[ChainReader] V2 internal txs error:`, err);
+      v2Failed = true;
     }
 
-    // 3. Token transfers FROM this address (ERC-20 drains via approve/transferFrom)
+    // 3. Token transfers FROM this address (V2)
     try {
       console.log(`[ChainReader] V2: Fetching token transfers from ${address}`);
       const data = await this.fetchV2(`/addresses/${address}/token-transfers?filter=from&type=ERC-20`);
@@ -174,7 +213,6 @@ export class ChainReader {
         const token = item.token as Record<string, unknown> | null;
         const decimals = parseInt(String(token?.decimals || '18'), 10);
         const rawValue = total?.value || '0';
-        // Convert token amount to a readable decimal string
         const tokenValue = (Number(BigInt(rawValue)) / Math.pow(10, decimals)).toFixed(6);
         allTxs.push({
           hash: ((item.tx_hash || item.transaction_hash || '') as string),
@@ -192,6 +230,12 @@ export class ChainReader {
       console.error(`[ChainReader] V2 token transfers error:`, err);
     }
 
+    // 4. V1 fallback — if V2 returned nothing (500 errors, timeouts, etc.)
+    if (allTxs.length === 0 || v2Failed) {
+      const v1Txs = await this.fetchV1Txs(address);
+      allTxs.push(...v1Txs);
+    }
+
     // Deduplicate by tx hash + recipient, exclude specified hashes
     const seen = new Set<string>();
     const merged: Transaction[] = [];
@@ -206,7 +250,7 @@ export class ChainReader {
 
     // Sort by value descending (follow the money)
     merged.sort((a, b) => parseFloat(b.value) - parseFloat(a.value));
-    console.log(`[ChainReader] V2: ${merged.length} merged outgoing txs`);
+    console.log(`[ChainReader] ${merged.length} merged outgoing txs (V2+V1 fallback)`);
     return merged;
   }
 
