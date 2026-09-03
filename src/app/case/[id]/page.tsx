@@ -196,7 +196,9 @@ function FundFlowGraph({ hops, analyses }: { hops: HopData[]; analyses: Analysis
   // Mark source/sink nodes
   const nodes = Array.from(nodeMap.values());
   for (const n of nodes) {
-    n.isSource = !incomingCount.has(n.id);
+    // Self-send: address is both sender and receiver — mark as source
+    const selfOnly = incomingCount.has(n.id) && outgoingCount.has(n.id) && nodes.length === 1;
+    n.isSource = !incomingCount.has(n.id) || selfOnly;
     n.isSink = !outgoingCount.has(n.id);
   }
 
@@ -269,14 +271,18 @@ function FundFlowGraph({ hops, analyses }: { hops: HopData[]; analyses: Analysis
     }
   };
 
+  // For small graphs, use a compact centered layout
+  const isSmall = nodes.length <= 3;
+  const graphW = isSmall ? 420 : svgWidth;
+  const graphH = isSmall ? 220 : svgHeight;
+
   return (
-    <div style={{ overflowX: 'auto', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)', background: 'var(--color-card)' }}>
+    <div style={{ overflowX: 'auto', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)', background: 'var(--color-card)', padding: isSmall ? '20px' : 0 }}>
       <svg
-        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+        viewBox={`0 0 ${graphW} ${graphH}`}
         width="100%"
-        height={svgHeight}
         preserveAspectRatio="xMidYMid meet"
-        style={{ display: 'block', maxWidth: svgWidth }}
+        style={{ display: 'block', maxWidth: '100%' }}
       >
         <defs>
           <marker id="arrow" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
@@ -292,10 +298,40 @@ function FundFlowGraph({ hops, analyses }: { hops: HopData[]; analyses: Analysis
           const fromNode = nodeMap.get(edge.from);
           const toNode = nodeMap.get(edge.to);
           if (!fromNode || !toNode) return null;
-          const x1 = fromNode.x + xCenter + 24;
-          const y1 = fromNode.y + yOffset;
-          const x2 = toNode.x + xCenter - 24;
-          const y2 = toNode.y + yOffset;
+
+          // Self-loop (from === to)
+          if (edge.from === edge.to) {
+            const cx = isSmall ? graphW / 2 : fromNode.x + xCenter;
+            const cy = isSmall ? graphH / 2 - 20 : fromNode.y + yOffset;
+            return (
+              <g key={`edge-${i}`}>
+                <path
+                  d={`M ${cx + 22} ${cy - 8} C ${cx + 70} ${cy - 60}, ${cx - 70} ${cy - 60}, ${cx - 22} ${cy - 8}`}
+                  fill="none"
+                  stroke={edge.flagged ? '#f85149' : 'var(--color-neutral-300)'}
+                  strokeWidth={edge.flagged ? 2 : 1.5}
+                  strokeDasharray={edge.flagged ? '6,3' : 'none'}
+                  markerEnd={edge.flagged ? 'url(#arrow-flagged)' : 'url(#arrow)'}
+                  opacity={0.7}
+                />
+                <text
+                  x={cx}
+                  y={cy - 58}
+                  textAnchor="middle"
+                  fontSize="9"
+                  fontFamily="var(--font-mono)"
+                  fill="var(--color-neutral-600)"
+                >
+                  {parseFloat(edge.amount).toFixed(4)} ETH (self-send)
+                </text>
+              </g>
+            );
+          }
+
+          const x1 = (isSmall ? fromNode.x + (graphW - contentWidth) / 2 : fromNode.x + xCenter) + 24;
+          const y1 = isSmall ? graphH / 2 - 20 : fromNode.y + yOffset;
+          const x2 = (isSmall ? toNode.x + (graphW - contentWidth) / 2 : toNode.x + xCenter) - 24;
+          const y2 = isSmall ? graphH / 2 - 20 : toNode.y + yOffset;
           const midX = (x1 + x2) / 2;
 
           return (
@@ -324,33 +360,47 @@ function FundFlowGraph({ hops, analyses }: { hops: HopData[]; analyses: Analysis
         })}
 
         {/* Nodes */}
-        {nodes.map((node) => {
-          const nx = node.x + xCenter;
-          const ny = node.y + yOffset;
+        {nodes.map((node, idx) => {
+          let nx: number, ny: number;
+          if (isSmall && nodes.length === 1) {
+            nx = graphW / 2;
+            ny = graphH / 2 - 20;
+          } else if (isSmall) {
+            nx = node.x + (graphW - contentWidth) / 2;
+            ny = graphH / 2 - 20;
+          } else {
+            nx = node.x + xCenter;
+            ny = node.y + yOffset;
+          }
           const color = riskColor(node.risk);
           const isTerminal = node.isSource || node.isSink;
+          const r = isSmall ? 28 : isTerminal ? 22 : 18;
 
           return (
             <g key={node.id}>
+              {/* Glow for small graphs */}
+              {isSmall && (
+                <circle cx={nx} cy={ny} r={r + 8} fill={color} opacity={0.06} />
+              )}
               {/* Node circle */}
               <circle
                 cx={nx}
                 cy={ny}
-                r={isTerminal ? 22 : 18}
+                r={r}
                 fill="var(--color-card)"
                 stroke={color}
-                strokeWidth={isTerminal ? 3 : 2}
+                strokeWidth={isSmall ? 3 : isTerminal ? 3 : 2}
               />
               {/* Icon */}
-              <text x={nx} y={ny + 1} textAnchor="middle" dominantBaseline="central" fontSize={isTerminal ? 9 : 8} fontWeight="700" fill={color} fontFamily="var(--font-mono)">
+              <text x={nx} y={ny + 1} textAnchor="middle" dominantBaseline="central" fontSize={isSmall ? 11 : isTerminal ? 9 : 8} fontWeight="700" fill={color} fontFamily="var(--font-mono)">
                 {node.isSource ? 'SRC' : node.isSink ? (node.flagReason?.includes('exchange') || node.flagReason?.includes('Known') ? 'CEX' : node.flagReason?.includes('Dead') ? 'END' : 'DST') : 'HOP'}
               </text>
               {/* Address label */}
               <text
                 x={nx}
-                y={ny + (isTerminal ? 34 : 30)}
+                y={ny + r + 14}
                 textAnchor="middle"
-                fontSize="9"
+                fontSize={isSmall ? 11 : 9}
                 fontFamily="var(--font-mono)"
                 fill="var(--color-text)"
               >
@@ -360,19 +410,19 @@ function FundFlowGraph({ hops, analyses }: { hops: HopData[]; analyses: Analysis
               {node.risk !== 'none' && (
                 <>
                   <rect
-                    x={nx + (isTerminal ? 14 : 10)}
-                    y={ny - (isTerminal ? 26 : 22)}
-                    width={30}
-                    height={14}
-                    rx={7}
+                    x={nx + r - 6}
+                    y={ny - r - 4}
+                    width={36}
+                    height={16}
+                    rx={8}
                     fill={color}
                     opacity={0.15}
                   />
                   <text
-                    x={nx + (isTerminal ? 29 : 25)}
-                    y={ny - (isTerminal ? 16 : 12)}
+                    x={nx + r + 12}
+                    y={ny - r + 8}
                     textAnchor="middle"
-                    fontSize="7"
+                    fontSize={isSmall ? 8 : 7}
                     fontWeight="700"
                     fill={color}
                   >
@@ -380,17 +430,17 @@ function FundFlowGraph({ hops, analyses }: { hops: HopData[]; analyses: Analysis
                   </text>
                 </>
               )}
-              {/* Flag reason tooltip */}
+              {/* Flag reason */}
               {node.flagReason && (
                 <text
                   x={nx}
-                  y={ny + (isTerminal ? 46 : 42)}
+                  y={ny + r + 28}
                   textAnchor="middle"
-                  fontSize="8"
+                  fontSize={isSmall ? 9 : 8}
                   fill={color}
                   fontWeight="500"
                 >
-                  ⚠ {node.flagReason.length > 35 ? node.flagReason.slice(0, 35) + '…' : node.flagReason}
+                  {node.flagReason.length > 40 ? node.flagReason.slice(0, 40) + '...' : node.flagReason}
                 </text>
               )}
             </g>
@@ -398,7 +448,7 @@ function FundFlowGraph({ hops, analyses }: { hops: HopData[]; analyses: Analysis
         })}
 
         {/* Legend */}
-        <g transform={`translate(12, ${svgHeight - 36})`}>
+        <g transform={`translate(12, ${graphH - 30})`}>
           <circle cx={6} cy={6} r={5} fill="none" stroke="#f85149" strokeWidth={2} />
           <text x={16} y={10} fontSize="8" fill="var(--color-neutral-600)">High risk</text>
           <circle cx={76} cy={6} r={5} fill="none" stroke="#d29922" strokeWidth={2} />
