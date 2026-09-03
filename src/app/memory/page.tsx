@@ -187,7 +187,7 @@ export default function Memory() {
                 width: 6, height: 6, borderRadius: 999,
                 background: memoryMode.mode !== 'local' ? '#3fb950' : 'var(--color-accent)',
               }} />
-              {memoryMode.mode === 'sibyl-bridge' ? 'Sibyl SDK Connected' : memoryMode.mode === 'redis-persistent' ? 'Persistent Memory (Redis)' : 'Sibyl Memory · Local'}
+              {memoryMode.mode === 'sibyl-sdk' ? 'Sibyl SDK + Redis Persistence' : memoryMode.mode === 'sibyl-bridge' ? 'Sibyl SDK Connected' : memoryMode.mode === 'redis-persistent' ? 'Persistent Memory (Redis)' : 'Sibyl Memory · Local'}
             </div>
           )}
         </div>

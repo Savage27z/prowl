@@ -391,20 +391,105 @@ async function ensureSeeded(): Promise<void> {
 export type MemoryAPI = typeof localMemory;
 
 /** Returns which memory backend is active */
-export function getMemoryMode(): { mode: 'sibyl-bridge' | 'redis-persistent' | 'local'; bridgeUrl: string | null } {
+export function getMemoryMode(): { mode: 'sibyl-sdk' | 'sibyl-bridge' | 'redis-persistent' | 'local'; bridgeUrl: string | null } {
   return {
-    mode: BRIDGE_URL ? 'sibyl-bridge' : REDIS_URL ? 'redis-persistent' : 'local',
+    mode: (BRIDGE_URL && REDIS_URL) ? 'sibyl-sdk' : BRIDGE_URL ? 'sibyl-bridge' : REDIS_URL ? 'redis-persistent' : 'local',
     bridgeUrl: BRIDGE_URL || REDIS_URL || null,
   };
 }
 
+// ─── Dual-backend: Sibyl Bridge + Redis write-through ──────────
+// When BOTH SIBYL_BRIDGE_URL and UPSTASH_REDIS_REST_URL are set,
+// writes go to all three: local Map, Redis (fast persistence), and
+// Sibyl Bridge (real SDK). Reads come from local (fastest).
+
+const dualMemory = {
+  async store(collection: CollectionName, document: Record<string, unknown>, id?: string): Promise<string> {
+    const docId = await localMemory.store(collection, document, id);
+    // Write-through to Redis (fast, survives cold starts)
+    persistCollectionToRedis(collection).catch(() => {});
+    // Write-through to Sibyl Bridge (real SDK — best effort)
+    bridgeFetch('/entity', {
+      method: 'POST',
+      body: { category: collection, name: docId, data: document },
+    }).catch(() => {});
+    return docId;
+  },
+
+  async retrieve<T>(collection: CollectionName, id: string): Promise<T | null> {
+    return localMemory.retrieve<T>(collection, id);
+  },
+
+  async query<T>(collection: CollectionName, options?: QueryOptions): Promise<T[]> {
+    return localMemory.query<T>(collection, options);
+  },
+
+  async update(collection: CollectionName, id: string, updates: Record<string, unknown>): Promise<void> {
+    await localMemory.update(collection, id, updates);
+    persistCollectionToRedis(collection).catch(() => {});
+    // Read-modify-write through bridge
+    const existing = await localMemory.retrieve<Record<string, unknown>>(collection, id);
+    if (existing) {
+      bridgeFetch('/entity', {
+        method: 'POST',
+        body: { category: collection, name: id, data: existing },
+      }).catch(() => {});
+    }
+  },
+
+  async delete(collection: CollectionName, id: string): Promise<void> {
+    await localMemory.delete(collection, id);
+    persistCollectionToRedis(collection).catch(() => {});
+    bridgeFetch(`/entity?category=${collection}&name=${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
+  },
+
+  async clearCollection(collection: CollectionName): Promise<void> {
+    await localMemory.clearCollection(collection);
+    persistCollectionToRedis(collection).catch(() => {});
+    bridgeFetch(`/clear?categories=${collection}`, { method: 'DELETE' }).catch(() => {});
+  },
+
+  async clearAll(): Promise<void> {
+    await localMemory.clearAll();
+    // Clear Redis
+    const redis = getRedis();
+    if (redis) {
+      for (const name of Object.values(COLLECTIONS)) {
+        await redis.del(`${REDIS_PREFIX}${name}`).catch(() => {});
+      }
+    }
+    // Clear Sibyl Bridge
+    bridgeFetch('/clear', { method: 'DELETE' }).catch(() => {});
+  },
+
+  async search<T>(query: string, collections?: CollectionName[]): Promise<T[]> {
+    return localMemory.search<T>(query, collections);
+  },
+
+  async stats(collection: CollectionName): Promise<{ count: number; lastUpdated: string | null }> {
+    return localMemory.stats(collection);
+  },
+
+  async healthCheck(): Promise<{ operational: boolean; collections: Record<string, number> }> {
+    return localMemory.healthCheck();
+  },
+
+  dump(): Record<string, Record<string, unknown>[]> {
+    return localMemory.dump();
+  },
+};
+
 export function getSibylMemory(): MemoryAPI {
   // Hydrate from Redis on first call (non-blocking)
-  if (REDIS_URL && !BRIDGE_URL) {
+  if (REDIS_URL) {
     hydrateFromRedis();
   }
   // Ensure seed data exists on cold start (non-blocking)
   ensureSeeded();
+  // Dual mode: Sibyl Bridge + Redis (both set)
+  if (BRIDGE_URL && REDIS_URL) {
+    return dualMemory;
+  }
   if (BRIDGE_URL) {
     return bridgeMemory;
   }
