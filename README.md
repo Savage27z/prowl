@@ -95,7 +95,7 @@ Case solved → patterns stored → next case starts smarter
 - **Framework:** Next.js 16 (App Router), React 19, TypeScript
 - **Styling:** TailwindCSS v4, CSS custom properties, full dark mode
 - **AI Reasoning:** OpenRouter API (DeepSeek model)
-- **Memory:** Sibyl Memory SDK — dual-mode adapter (in-memory dev / Python bridge for production Sibyl)
+- **Memory:** Sibyl Memory SDK — tri-mode adapter (in-memory dev / Redis persistent / Python bridge for Sibyl SDK)
 - **Chain:** Base Sepolia L2, Basescan API, viem
 - **Wallet:** RainbowKit + wagmi, SIWE authentication
 - **Contracts:** Solidity 0.8.20, Hardhat, bounty escrow on Base
@@ -198,14 +198,24 @@ npx hardhat run scripts/deploy.ts --network base-sepolia
 npx hardhat verify --network base-sepolia <contract-address>
 ```
 
-### Optional: Sibyl Bridge (persistent memory across restarts)
+### Persistent Memory (recommended for production)
 
+**Option A: Upstash Redis** (zero-config, works on Vercel)
+```bash
+# Create a free database at upstash.com, then set env vars:
+UPSTASH_REDIS_REST_URL=https://your-db.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your-token
+```
+
+**Option B: Sibyl Bridge** (full Sibyl SDK via Python)
 ```bash
 cd sibyl-bridge
 pip install -r requirements.txt
 python server.py
 # Set SIBYL_BRIDGE_URL=http://localhost:4001 in .env.local
 ```
+
+Memory mode is auto-detected: Redis if `UPSTASH_REDIS_REST_URL` is set, Sibyl bridge if `SIBYL_BRIDGE_URL` is set, in-memory otherwise. Check the mode indicator at `/memory`.
 
 ---
 

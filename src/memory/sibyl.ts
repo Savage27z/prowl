@@ -1,12 +1,14 @@
-// Sibyl Memory — dual-mode adapter (local dev + real Sibyl bridge)
-// Sibyl Memory — unified interface
+// Sibyl Memory — tri-mode adapter
 // Mode 1 (default): in-memory store — works instantly, no deps
 // Mode 2 (SIBYL_BRIDGE_URL set): forwards to Python sibyl-memory-client bridge
+// Mode 3 (UPSTASH_REDIS_REST_URL set): persists to Upstash Redis — survives cold starts
 // All 3 agents + API routes import getSibylMemory() — one interface, swappable backend
 
 import { COLLECTIONS, type CollectionName } from './schemas';
 
 const BRIDGE_URL = process.env.SIBYL_BRIDGE_URL || ''; // e.g. http://localhost:4001
+const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL || '';
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || '';
 
 interface QueryOptions {
   filter?: Record<string, unknown>;
@@ -231,6 +233,125 @@ const bridgeMemory = {
   },
 };
 
+// ─── Redis persistence layer (Mode 3) ──────────────────────────
+// Wraps localMemory with write-through to Upstash Redis.
+// Reads populate local cache on first access; writes go to both.
+
+let _redisClient: import('@upstash/redis').Redis | null = null;
+
+function getRedis(): import('@upstash/redis').Redis | null {
+  if (_redisClient) return _redisClient;
+  if (!REDIS_URL || !REDIS_TOKEN) return null;
+  try {
+    // Dynamic import to avoid bundling when not used
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Redis } = require('@upstash/redis') as typeof import('@upstash/redis');
+    _redisClient = new Redis({ url: REDIS_URL, token: REDIS_TOKEN });
+    return _redisClient;
+  } catch {
+    return null;
+  }
+}
+
+const REDIS_PREFIX = 'prowl:';
+let _redisHydrated = false;
+
+async function hydrateFromRedis(): Promise<void> {
+  if (_redisHydrated) return;
+  _redisHydrated = true;
+  const redis = getRedis();
+  if (!redis) return;
+  try {
+    for (const collectionName of Object.values(COLLECTIONS)) {
+      const key = `${REDIS_PREFIX}${collectionName}`;
+      const raw = await redis.get<Record<string, { id: string; data: Record<string, unknown>; ts: string }>>(key);
+      if (raw && typeof raw === 'object') {
+        const c = col(collectionName);
+        for (const [docId, doc] of Object.entries(raw)) {
+          if (!c.has(docId)) {
+            c.set(docId, doc);
+          }
+        }
+      }
+    }
+    console.log('[SibylMemory] Hydrated from Redis — persistent memory active');
+  } catch (e) {
+    console.log('[SibylMemory] Redis hydration failed, falling back to local:', e);
+  }
+}
+
+async function persistCollectionToRedis(collectionName: CollectionName): Promise<void> {
+  const redis = getRedis();
+  if (!redis) return;
+  try {
+    const c = col(collectionName);
+    const data: Record<string, { id: string; data: Record<string, unknown>; ts: string }> = {};
+    for (const [id, doc] of c.entries()) {
+      data[id] = doc;
+    }
+    await redis.set(`${REDIS_PREFIX}${collectionName}`, data);
+  } catch {
+    // Silent fail — local memory still works
+  }
+}
+
+const redisMemory = {
+  async store(collection: CollectionName, document: Record<string, unknown>, id?: string): Promise<string> {
+    const docId = await localMemory.store(collection, document, id);
+    await persistCollectionToRedis(collection);
+    return docId;
+  },
+
+  async retrieve<T>(collection: CollectionName, id: string): Promise<T | null> {
+    return localMemory.retrieve<T>(collection, id);
+  },
+
+  async query<T>(collection: CollectionName, options?: QueryOptions): Promise<T[]> {
+    return localMemory.query<T>(collection, options);
+  },
+
+  async update(collection: CollectionName, id: string, updates: Record<string, unknown>): Promise<void> {
+    await localMemory.update(collection, id, updates);
+    await persistCollectionToRedis(collection);
+  },
+
+  async delete(collection: CollectionName, id: string): Promise<void> {
+    await localMemory.delete(collection, id);
+    await persistCollectionToRedis(collection);
+  },
+
+  async clearCollection(collection: CollectionName): Promise<void> {
+    await localMemory.clearCollection(collection);
+    await persistCollectionToRedis(collection);
+  },
+
+  async clearAll(): Promise<void> {
+    await localMemory.clearAll();
+    const redis = getRedis();
+    if (redis) {
+      for (const name of Object.values(COLLECTIONS)) {
+        await redis.del(`${REDIS_PREFIX}${name}`);
+      }
+    }
+  },
+
+  async search<T>(query: string, collections?: CollectionName[]): Promise<T[]> {
+    return localMemory.search<T>(query, collections);
+  },
+
+  async stats(collection: CollectionName): Promise<{ count: number; lastUpdated: string | null }> {
+    return localMemory.stats(collection);
+  },
+
+  async healthCheck(): Promise<{ operational: boolean; collections: Record<string, number> }> {
+    return localMemory.healthCheck();
+  },
+
+  dump(): Record<string, Record<string, unknown>[]> {
+    return localMemory.dump();
+  },
+};
+
 // ─── Auto-seed (ensures patterns exist on cold start) ──────────
 
 const SEED_PATTERNS = [
@@ -270,18 +391,25 @@ async function ensureSeeded(): Promise<void> {
 export type MemoryAPI = typeof localMemory;
 
 /** Returns which memory backend is active */
-export function getMemoryMode(): { mode: 'sibyl-bridge' | 'local'; bridgeUrl: string | null } {
+export function getMemoryMode(): { mode: 'sibyl-bridge' | 'redis-persistent' | 'local'; bridgeUrl: string | null } {
   return {
-    mode: BRIDGE_URL ? 'sibyl-bridge' : 'local',
-    bridgeUrl: BRIDGE_URL || null,
+    mode: BRIDGE_URL ? 'sibyl-bridge' : REDIS_URL ? 'redis-persistent' : 'local',
+    bridgeUrl: BRIDGE_URL || REDIS_URL || null,
   };
 }
 
 export function getSibylMemory(): MemoryAPI {
+  // Hydrate from Redis on first call (non-blocking)
+  if (REDIS_URL && !BRIDGE_URL) {
+    hydrateFromRedis();
+  }
   // Ensure seed data exists on cold start (non-blocking)
   ensureSeeded();
   if (BRIDGE_URL) {
     return bridgeMemory;
+  }
+  if (REDIS_URL) {
+    return redisMemory;
   }
   return localMemory;
 }

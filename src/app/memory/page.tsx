@@ -179,15 +179,15 @@ export default function Memory() {
               fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.08em',
               textTransform: 'uppercase', padding: '3px 10px',
               borderRadius: 'var(--radius-md)',
-              border: `1px solid ${memoryMode.mode === 'sibyl-bridge' ? 'var(--color-accent-300)' : 'var(--color-divider)'}`,
-              color: memoryMode.mode === 'sibyl-bridge' ? 'var(--color-accent-700)' : 'var(--color-neutral-600)',
-              background: memoryMode.mode === 'sibyl-bridge' ? 'var(--color-accent-100)' : 'transparent',
+              border: `1px solid ${memoryMode.mode !== 'local' ? 'var(--color-accent-300)' : 'var(--color-divider)'}`,
+              color: memoryMode.mode !== 'local' ? 'var(--color-accent-700)' : 'var(--color-neutral-600)',
+              background: memoryMode.mode !== 'local' ? 'var(--color-accent-100)' : 'transparent',
             }}>
               <span style={{
                 width: 6, height: 6, borderRadius: 999,
-                background: memoryMode.mode === 'sibyl-bridge' ? '#3fb950' : 'var(--color-accent)',
+                background: memoryMode.mode !== 'local' ? '#3fb950' : 'var(--color-accent)',
               }} />
-              {memoryMode.mode === 'sibyl-bridge' ? 'Sibyl SDK Connected' : 'Sibyl Memory · Local'}
+              {memoryMode.mode === 'sibyl-bridge' ? 'Sibyl SDK Connected' : memoryMode.mode === 'redis-persistent' ? 'Persistent Memory (Redis)' : 'Sibyl Memory · Local'}
             </div>
           )}
         </div>
