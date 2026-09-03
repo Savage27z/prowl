@@ -105,7 +105,15 @@ export class ChainReader {
     try {
       const response = await fetch(apiUrl, { signal: controller.signal });
       clearTimeout(timeout);
-      return await response.json() as Record<string, unknown>;
+      if (!response.ok) {
+        throw new Error(`Blockscout V2 HTTP ${response.status}`);
+      }
+      const data = await response.json();
+      // V2 sometimes returns a string error instead of an object
+      if (typeof data === 'string') {
+        throw new Error(`Blockscout V2 error: ${data}`);
+      }
+      return data as Record<string, unknown>;
     } catch (err) {
       clearTimeout(timeout);
       throw err;
