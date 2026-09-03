@@ -70,7 +70,7 @@ Case solved → patterns stored → next case starts smarter
 │   Dashboard · Cases · Patterns · Sibyl Memory   │
 │   Bounty Form · Agent Status · Payouts          │
 └──────────────────┬──────────────────────────────┘
-                   │ SSE + REST API
+                   │ Polling + REST API
 ┌──────────────────┴──────────────────────────────┐
 │              Coordinator Agent                  │
 │    Orchestrates: Tracer → Analyst → Monitor     │
@@ -99,7 +99,7 @@ Case solved → patterns stored → next case starts smarter
 - **Chain:** Base Sepolia L2, Basescan API, viem
 - **Wallet:** RainbowKit + wagmi, SIWE authentication
 - **Contracts:** Solidity 0.8.20, Hardhat, bounty escrow on Base
-- **Real-time:** SSE (Server-Sent Events) for live investigation updates
+- **Real-time:** Polling + event log for live investigation updates
 - **Auth:** iron-session encrypted cookies + SIWE
 
 ## Partner Stacks
@@ -141,7 +141,7 @@ prowl/
 │   │   ├── memory/page.tsx          # Sibyl Memory explorer
 │   │   ├── agents/page.tsx          # Agent swarm status
 │   │   ├── bounty/new/page.tsx      # Post bounty form
-│   │   └── api/                     # REST + SSE endpoints
+│   │   └── api/                     # REST + polling endpoints
 │   ├── components/
 │   │   ├── DashboardShell.tsx       # Shared layout shell
 │   │   └── AuthGuard.tsx            # SIWE auth gate
@@ -200,7 +200,7 @@ python server.py
 1. **Connect wallet** — RainbowKit modal, sign SIWE message
 2. **Dashboard** — real-time stats: funds traced, cases, agent activity chart
 3. **Post a bounty** — enter victim wallet + incident TX, describe the theft
-4. **Watch agents investigate** — SSE-powered live updates as Tracer → Analyst → Monitor pipeline runs
+4. **Watch agents investigate** — live polling updates as Tracer → Analyst → Monitor pipeline runs
 5. **Browse patterns** — see what the swarm has learned across cases
 6. **Sibyl Memory** — explore the shared memory store, search by address or pattern
 7. **Memory deletion test** — clear memory at Sibyl Memory page, start a new investigation, watch coordination degrade — proves memory is load-bearing

@@ -122,6 +122,291 @@ function timeAgo(ts: string): string {
   return new Date(ts).toLocaleTimeString();
 }
 
+/* ── Fund Flow Graph — visual node-edge map of the money trail ── */
+
+interface GraphNode {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  risk: 'high' | 'medium' | 'low' | 'none';
+  flagReason?: string | null;
+  isSource?: boolean;
+  isSink?: boolean;
+}
+
+interface GraphEdge {
+  from: string;
+  to: string;
+  amount: string;
+  hopNumber: number;
+  flagged: boolean;
+}
+
+function FundFlowGraph({ hops, analyses }: { hops: HopData[]; analyses: AnalysisData[] }) {
+  // Build nodes and edges from hop data
+  const riskMap = new Map<string, string>();
+  for (const a of analyses) {
+    riskMap.set(a.address_analyzed.toLowerCase(), a.risk_level);
+  }
+
+  const nodeMap = new Map<string, GraphNode>();
+  const edges: GraphEdge[] = [];
+  const incomingCount = new Map<string, number>();
+  const outgoingCount = new Map<string, number>();
+
+  for (const hop of hops) {
+    const fromKey = hop.from_address.toLowerCase();
+    const toKey = hop.to_address.toLowerCase();
+
+    outgoingCount.set(fromKey, (outgoingCount.get(fromKey) || 0) + 1);
+    incomingCount.set(toKey, (incomingCount.get(toKey) || 0) + 1);
+
+    if (!nodeMap.has(fromKey)) {
+      nodeMap.set(fromKey, {
+        id: fromKey,
+        label: hop.from_address.slice(0, 6) + '…' + hop.from_address.slice(-4),
+        x: 0, y: 0,
+        risk: (riskMap.get(fromKey) as GraphNode['risk']) || 'none',
+      });
+    }
+    if (!nodeMap.has(toKey)) {
+      nodeMap.set(toKey, {
+        id: toKey,
+        label: hop.to_address.slice(0, 6) + '…' + hop.to_address.slice(-4),
+        x: 0, y: 0,
+        risk: (riskMap.get(toKey) as GraphNode['risk']) || 'none',
+        flagReason: hop.flagged ? hop.flag_reason : null,
+      });
+    }
+    if (hop.flagged && hop.flag_reason) {
+      const node = nodeMap.get(toKey)!;
+      node.flagReason = hop.flag_reason;
+    }
+
+    edges.push({
+      from: fromKey,
+      to: toKey,
+      amount: hop.amount,
+      hopNumber: hop.hop_number,
+      flagged: hop.flagged,
+    });
+  }
+
+  // Mark source/sink nodes
+  const nodes = Array.from(nodeMap.values());
+  for (const n of nodes) {
+    n.isSource = !incomingCount.has(n.id);
+    n.isSink = !outgoingCount.has(n.id);
+  }
+
+  // Layout: topological sort into layers, then spread within layers
+  const layers = new Map<string, number>();
+  const queue = nodes.filter(n => n.isSource).map(n => n.id);
+  for (const id of queue) layers.set(id, 0);
+
+  // BFS layering
+  const visited = new Set<string>();
+  const bfsQueue = [...queue];
+  while (bfsQueue.length > 0) {
+    const current = bfsQueue.shift()!;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    const currentLayer = layers.get(current) || 0;
+    for (const edge of edges) {
+      if (edge.from === current && !visited.has(edge.to)) {
+        const existing = layers.get(edge.to) || 0;
+        layers.set(edge.to, Math.max(existing, currentLayer + 1));
+        bfsQueue.push(edge.to);
+      }
+    }
+  }
+  // Handle disconnected nodes
+  for (const n of nodes) {
+    if (!layers.has(n.id)) layers.set(n.id, 0);
+  }
+
+  // Group by layer
+  const layerGroups = new Map<number, GraphNode[]>();
+  for (const n of nodes) {
+    const l = layers.get(n.id) || 0;
+    if (!layerGroups.has(l)) layerGroups.set(l, []);
+    layerGroups.get(l)!.push(n);
+  }
+
+  const maxLayer = Math.max(...Array.from(layerGroups.keys()), 0);
+  const layerSpacing = 180;
+  const nodeSpacing = 100;
+  const padX = 80;
+  const padY = 60;
+
+  for (const [layer, group] of layerGroups) {
+    const totalHeight = (group.length - 1) * nodeSpacing;
+    group.forEach((n, i) => {
+      n.x = padX + layer * layerSpacing;
+      n.y = padY + i * nodeSpacing - totalHeight / 2 + 150;
+    });
+  }
+
+  const svgWidth = Math.max(600, padX * 2 + maxLayer * layerSpacing + 60);
+  const allY = nodes.map(n => n.y);
+  const minY = Math.min(...allY, 40);
+  const maxY = Math.max(...allY, 200);
+  const svgHeight = maxY - minY + 140;
+  const yOffset = -minY + 60;
+
+  const riskColor = (risk: string) => {
+    switch (risk) {
+      case 'high': return '#f85149';
+      case 'medium': return '#d29922';
+      case 'low': return '#3fb950';
+      default: return 'var(--color-neutral-400)';
+    }
+  };
+
+  return (
+    <div style={{ overflowX: 'auto', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)', background: 'var(--color-card)' }}>
+      <svg
+        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+        width={svgWidth}
+        height={svgHeight}
+        style={{ display: 'block', minWidth: svgWidth }}
+      >
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+            <polygon points="0 0, 10 3.5, 0 7" fill="var(--color-neutral-400)" />
+          </marker>
+          <marker id="arrow-flagged" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#f85149" />
+          </marker>
+        </defs>
+
+        {/* Edges */}
+        {edges.map((edge, i) => {
+          const fromNode = nodeMap.get(edge.from);
+          const toNode = nodeMap.get(edge.to);
+          if (!fromNode || !toNode) return null;
+          const x1 = fromNode.x + 24;
+          const y1 = fromNode.y + yOffset;
+          const x2 = toNode.x - 24;
+          const y2 = toNode.y + yOffset;
+          const midX = (x1 + x2) / 2;
+
+          return (
+            <g key={`edge-${i}`}>
+              <path
+                d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
+                fill="none"
+                stroke={edge.flagged ? '#f85149' : 'var(--color-neutral-300)'}
+                strokeWidth={edge.flagged ? 2 : 1.5}
+                strokeDasharray={edge.flagged ? '6,3' : 'none'}
+                markerEnd={edge.flagged ? 'url(#arrow-flagged)' : 'url(#arrow)'}
+                opacity={0.7}
+              />
+              <text
+                x={midX}
+                y={(y1 + y2) / 2 - 8}
+                textAnchor="middle"
+                fontSize="9"
+                fontFamily="var(--font-mono)"
+                fill="var(--color-neutral-600)"
+              >
+                {parseFloat(edge.amount).toFixed(4)} ETH
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Nodes */}
+        {nodes.map((node) => {
+          const nx = node.x;
+          const ny = node.y + yOffset;
+          const color = riskColor(node.risk);
+          const isTerminal = node.isSource || node.isSink;
+
+          return (
+            <g key={node.id}>
+              {/* Node circle */}
+              <circle
+                cx={nx}
+                cy={ny}
+                r={isTerminal ? 22 : 18}
+                fill="var(--color-card)"
+                stroke={color}
+                strokeWidth={isTerminal ? 3 : 2}
+              />
+              {/* Icon */}
+              <text x={nx} y={ny + 1} textAnchor="middle" dominantBaseline="central" fontSize={isTerminal ? 14 : 12}>
+                {node.isSource ? '💰' : node.isSink ? (node.flagReason?.includes('exchange') || node.flagReason?.includes('Known') ? '🏦' : node.flagReason?.includes('Dead') ? '🔒' : '📍') : '👛'}
+              </text>
+              {/* Address label */}
+              <text
+                x={nx}
+                y={ny + (isTerminal ? 34 : 30)}
+                textAnchor="middle"
+                fontSize="9"
+                fontFamily="var(--font-mono)"
+                fill="var(--color-text)"
+              >
+                {node.label}
+              </text>
+              {/* Risk badge */}
+              {node.risk !== 'none' && (
+                <>
+                  <rect
+                    x={nx + (isTerminal ? 14 : 10)}
+                    y={ny - (isTerminal ? 26 : 22)}
+                    width={30}
+                    height={14}
+                    rx={7}
+                    fill={color}
+                    opacity={0.15}
+                  />
+                  <text
+                    x={nx + (isTerminal ? 29 : 25)}
+                    y={ny - (isTerminal ? 16 : 12)}
+                    textAnchor="middle"
+                    fontSize="7"
+                    fontWeight="700"
+                    fill={color}
+                  >
+                    {node.risk.toUpperCase()}
+                  </text>
+                </>
+              )}
+              {/* Flag reason tooltip */}
+              {node.flagReason && (
+                <text
+                  x={nx}
+                  y={ny + (isTerminal ? 46 : 42)}
+                  textAnchor="middle"
+                  fontSize="8"
+                  fill={color}
+                  fontWeight="500"
+                >
+                  ⚠ {node.flagReason.length > 35 ? node.flagReason.slice(0, 35) + '…' : node.flagReason}
+                </text>
+              )}
+            </g>
+          );
+        })}
+
+        {/* Legend */}
+        <g transform={`translate(12, ${svgHeight - 36})`}>
+          <circle cx={6} cy={6} r={5} fill="none" stroke="#f85149" strokeWidth={2} />
+          <text x={16} y={10} fontSize="8" fill="var(--color-neutral-600)">High risk</text>
+          <circle cx={76} cy={6} r={5} fill="none" stroke="#d29922" strokeWidth={2} />
+          <text x={86} y={10} fontSize="8" fill="var(--color-neutral-600)">Medium</text>
+          <circle cx={136} cy={6} r={5} fill="none" stroke="#3fb950" strokeWidth={2} />
+          <text x={146} y={10} fontSize="8" fill="var(--color-neutral-600)">Low</text>
+          <line x1={196} y1={6} x2={220} y2={6} stroke="#f85149" strokeWidth={2} strokeDasharray="6,3" />
+          <text x={226} y={10} fontSize="8" fill="var(--color-neutral-600)">Flagged</text>
+        </g>
+      </svg>
+    </div>
+  );
+}
+
 /* ── Event details sub-component ── */
 
 function EventDetails({ data }: { data: Record<string, unknown> }) {
@@ -494,7 +779,7 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
   const [analyses, setAnalyses] = useState<AnalysisData[]>([]);
   const [feed, setFeed] = useState<FeedEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'feed' | 'hops' | 'analysis' | 'report'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'hops' | 'graph' | 'analysis' | 'report'>('feed');
   const [pipelineDone, setPipelineDone] = useState(false);
   const feedRef = useRef<HTMLDivElement>(null);
   const [payoutPending, setPayoutPending] = useState(false);
@@ -789,6 +1074,7 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
         {[
           { key: 'feed' as const, label: 'Live feed', count: feed.length },
           { key: 'hops' as const, label: 'Hop timeline', count: hops.length },
+          { key: 'graph' as const, label: 'Fund graph', count: hops.length > 0 ? 1 : 0 },
           { key: 'analysis' as const, label: 'Analysis', count: analyses.length },
           { key: 'report' as const, label: 'Report', count: pipelineDone ? 1 : 0 },
         ].map((tab) => (
@@ -973,6 +1259,24 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
               </div>
             ))}
           </div>
+        )
+      )}
+
+      {/* Fund Flow Graph */}
+      {activeTab === 'graph' && (
+        hops.length === 0 ? (
+          <div style={{
+            borderRadius: 'var(--radius-md)', border: '1px dashed var(--color-divider)',
+            background: 'var(--color-neutral-100)', padding: 'clamp(40px, 5vw, 60px)',
+            textAlign: 'center',
+          }}>
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, marginBottom: 6 }}>No fund flow data</div>
+            <p style={{ fontSize: 12, color: 'var(--color-neutral-600)', maxWidth: '36ch', margin: '0 auto' }}>
+              The graph will render once Tracer maps the fund trail.
+            </p>
+          </div>
+        ) : (
+          <FundFlowGraph hops={hops} analyses={analyses} />
         )
       )}
 
