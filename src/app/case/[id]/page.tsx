@@ -336,8 +336,8 @@ function FundFlowGraph({ hops, analyses }: { hops: HopData[]; analyses: Analysis
                 strokeWidth={isTerminal ? 3 : 2}
               />
               {/* Icon */}
-              <text x={nx} y={ny + 1} textAnchor="middle" dominantBaseline="central" fontSize={isTerminal ? 14 : 12}>
-                {node.isSource ? '💰' : node.isSink ? (node.flagReason?.includes('exchange') || node.flagReason?.includes('Known') ? '🏦' : node.flagReason?.includes('Dead') ? '🔒' : '📍') : '👛'}
+              <text x={nx} y={ny + 1} textAnchor="middle" dominantBaseline="central" fontSize={isTerminal ? 9 : 8} fontWeight="700" fill={color} fontFamily="var(--font-mono)">
+                {node.isSource ? 'SRC' : node.isSink ? (node.flagReason?.includes('exchange') || node.flagReason?.includes('Known') ? 'CEX' : node.flagReason?.includes('Dead') ? 'END' : 'DST') : 'HOP'}
               </text>
               {/* Address label */}
               <text
