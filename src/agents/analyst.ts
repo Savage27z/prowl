@@ -399,11 +399,20 @@ Rules:
   }
 
   private calculateOverallRisk(analyses: Analysis[]): 'high' | 'medium' | 'low' {
-    const highCount = analyses.filter((a) => a.risk_level === 'high').length;
+    const high = analyses.filter((a) => a.risk_level === 'high');
     const medCount = analyses.filter((a) => a.risk_level === 'medium').length;
 
-    if (highCount >= 2 || (highCount >= 1 && medCount >= 2)) return 'high';
-    if (highCount >= 1 || medCount >= 2) return 'medium';
+    // Weigh evidence strength, not just how many analyses exist. Analyses are
+    // now one-per-destination, so a short trail into a single confirmed
+    // launderer yields exactly one high entry — counting rows alone capped
+    // such a case at medium and contradicted the Analyst's own assessment.
+    // One address seen across multiple prior cases is strong evidence by itself.
+    const strongHigh = high.some(
+      (a) => a.confidence >= 0.9 || (a.similar_cases?.length ?? 0) >= 2,
+    );
+
+    if (high.length >= 2 || strongHigh || (high.length >= 1 && medCount >= 2)) return 'high';
+    if (high.length >= 1 || medCount >= 2) return 'medium';
     return 'low';
   }
 
