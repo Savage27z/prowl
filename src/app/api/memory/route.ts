@@ -3,7 +3,7 @@
 // Used by the Memory debug page and deletion test demo
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getSibylMemory, waitForMemoryReady, getMemoryMode } from '@/memory/sibyl';
+import { getSibylMemory, waitForMemoryReady, refreshMemoryFromRemote, getMemoryMode } from '@/memory/sibyl';
 import { COLLECTIONS } from '@/memory/schemas';
 import { requireAuth } from '@/lib/auth';
 
@@ -15,8 +15,10 @@ export async function GET() {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
 
-    // Module-scope hydration is not awaited; without this a cold lambda
-    // serves an empty store and the UI renders zeros.
+    // Re-sync rather than just awaiting the one-shot gate: an investigation
+    // may have been written by a DIFFERENT lambda since this one hydrated,
+    // and serving our stale cache renders the case as zeros.
+    await refreshMemoryFromRemote();
     await waitForMemoryReady();
     const health = await memory.healthCheck();
     const collections = memory.dump();

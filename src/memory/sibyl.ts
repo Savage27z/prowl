@@ -554,4 +554,24 @@ export function waitForMemoryReady(): Promise<void> {
   return _readyPromise;
 }
 
+/// Force a fresh pull from the remote stores, discarding the memoized
+/// hydration gate.
+///
+/// waitForMemoryReady() hydrates ONCE per process. That is right for a cold
+/// start, but wrong for a read endpoint on serverless: an investigation runs
+/// on one lambda and writes to that lambda's Map plus the bridge, while the
+/// next read may land on a different, already-hydrated lambda whose cache
+/// predates the write. It would then serve a stale store and the UI would
+/// render zeros for a case that definitely has hops.
+///
+/// Hydration only inserts keys the local Map lacks, so re-running is
+/// idempotent and never clobbers local writes.
+export async function refreshMemoryFromRemote(): Promise<void> {
+  if (!REDIS_URL && !BRIDGE_URL) return; // purely local: nothing to re-sync
+  _redisHydratePromise = null;
+  _bridgeHydratePromise = null;
+  _readyPromise = null;
+  await waitForMemoryReady();
+}
+
 export type { QueryOptions };
