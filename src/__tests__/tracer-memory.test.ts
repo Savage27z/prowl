@@ -112,7 +112,7 @@ describe('TracerAgent — memory changes real branch selection', () => {
     expect(firstBranch!.flag_reason).toContain('Memory hit');
   });
 
-  it('an explicit skip directive removes a branch from tracing', async () => {
+  it('a skip directive records the destination as terminal, then stops', async () => {
     // Analyst marks BIG as a verified service — the only way to earn a skip.
     const skipAnalysis: Analysis = {
       case_id: 'case-A',
@@ -134,13 +134,26 @@ describe('TracerAgent — memory changes real branch selection', () => {
     const tracer = new TracerAgent();
     const result = await tracer.startTrace('case-skip', INCIDENT_TX, VICTIM);
 
-    const branches = result.hops
-      .filter((h) => h.from_address.toLowerCase() === THIEF.toLowerCase())
-      .map((h) => h.to_address.toLowerCase());
+    const fromThief = result.hops.filter(
+      (h) => h.from_address.toLowerCase() === THIEF.toLowerCase(),
+    );
+    const bigHop = fromThief.find((h) => h.to_address.toLowerCase() === BIG.toLowerCase());
 
-    // BIG was skipped despite being the largest transfer.
-    expect(branches).not.toContain(BIG.toLowerCase());
-    expect(branches).toContain(MID.toLowerCase());
+    // A skip means "known terminal", NOT "pretend this never happened".
+    // The destination must survive in the trace, or a real identified
+    // endpoint silently disappears and funds recovered are understated.
+    expect(bigHop).toBeDefined();
+    expect(bigHop!.flagged).toBe(true);
+    expect(bigHop!.flag_reason).toContain('Known destination (memory)');
+    // Its own branch, so it never collides with a traced branch.
+    expect(bigHop!.branch_id).toContain('known');
+
+    // ...but the trail stops there: nothing was traced onward from BIG.
+    expect(result.hops.some((h) => h.from_address.toLowerCase() === BIG.toLowerCase()))
+      .toBe(false);
+
+    // Other branches are still followed normally.
+    expect(fromThief.map((h) => h.to_address.toLowerCase())).toContain(MID.toLowerCase());
   });
 
   it('seeding from a suspect address records the victim -> suspect theft as hop 0', async () => {
@@ -198,6 +211,32 @@ describe('TracerAgent — memory changes real branch selection', () => {
     expect(summary).toContain('1000 USDC');
     // The token amount must never be folded into the ETH figure.
     expect(summary).not.toContain('1005');
+  });
+
+  it('a split nested under a branch is not double-counted', async () => {
+    const { summarizeTracedFunds } = await import('@/chain/utils');
+
+    // 5 ETH enters main-0, then splits into main-0-0 (3) and main-0-1 (2).
+    // Counting the parent AND its children would report 10 ETH for 5 stolen.
+    const nested = [
+      { amount: '5.0', branch_id: 'main-0', asset_symbol: 'ETH', asset_contract: 'native' },
+      { amount: '3.0', branch_id: 'main-0-0', asset_symbol: 'ETH', asset_contract: 'native' },
+      { amount: '2.0', branch_id: 'main-0-1', asset_symbol: 'ETH', asset_contract: 'native' },
+    ];
+    // Only the leaves count: 3 + 2 = 5.
+    expect(summarizeTracedFunds(nested)).toBe('5.000000 ETH');
+  });
+
+  it('branch ids are matched on the separator, not raw prefix', async () => {
+    const { summarizeTracedFunds } = await import('@/chain/utils');
+
+    // "main-01" must NOT be treated as a descendant of "main-0"; both are
+    // leaves and both count.
+    const siblings = [
+      { amount: '1.0', branch_id: 'main-0', asset_symbol: 'ETH', asset_contract: 'native' },
+      { amount: '2.0', branch_id: 'main-01', asset_symbol: 'ETH', asset_contract: 'native' },
+    ];
+    expect(summarizeTracedFunds(siblings)).toBe('3.000000 ETH');
   });
 
   it('low risk alone does NOT cause a skip (insufficient evidence)', async () => {

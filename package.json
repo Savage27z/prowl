@@ -7,8 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint src/",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run && hardhat test",
+    "test:watch": "vitest",
+    "test:unit": "vitest run",
+    "test:contracts": "hardhat test"
   },
   "dependencies": {
     "@rainbow-me/rainbowkit": "^2.2.11",

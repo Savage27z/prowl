@@ -275,10 +275,37 @@ export class TracerAgent {
         `DECISION: Prioritized ${tx.to.slice(0, 10)}... (memory: known from prior case)`
       );
     }
-    for (const tx of memorySkipped) {
+    // A skip directive means "this destination is a KNOWN TERMINAL" — a
+    // verified service the funds reached. Record it as the final hop on its
+    // own branch and stop there. Dropping it silently would erase a real,
+    // identified destination from the trace and understate funds recovered.
+    for (let s = 0; s < memorySkipped.length; s++) {
+      if (this.totalHopsTraced >= this.maxTotalHops || Date.now() > this.traceDeadline) break;
+      const tx = memorySkipped[s];
       this.memoryHits.push(
-        `DECISION: Skipped ${tx.to.slice(0, 10)}... (memory: known safe/irrelevant)`
+        `DECISION: ${tx.to.slice(0, 10)}... recorded as known terminal (memory), not traced further`
       );
+      const terminalHop: Hop = {
+        case_id: caseId,
+        hop_number: hopNumber,
+        from_address: address,
+        to_address: tx.to,
+        amount: tx.value,
+        asset_symbol: tx.asset.symbol,
+        asset_contract: tx.asset.contract,
+        tx_hash: tx.hash,
+        timestamp: tx.timestamp,
+        is_split: isSplit,
+        // Own branch id so it never collides with a traced branch at the
+        // same hop number — writeHop keys on `<case>-hop-<n>-<branch>`.
+        branch_id: `${branchId}-known${s}`,
+        flagged: true,
+        flag_reason: 'Known destination (memory) — funds reached a verified service, trail ends here',
+      };
+      hops.push(terminalHop);
+      this.totalHopsTraced++;
+      this.excludeHashes.add(tx.hash.toLowerCase());
+      await this.writeHop(terminalHop);
     }
 
     // Build branch list: memory-prioritized first, then AI/value-sorted rest

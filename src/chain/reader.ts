@@ -499,12 +499,57 @@ export const KNOWN_ADDRESSES: Record<string, KnownAddressEntry> = {
   // Populate from a verified Base attribution source before relying on this.
 };
 
+/// Operator-supplied known addresses, merged over the built-in table.
+///
+/// The built-in list is deliberately minimal — only addresses verifiable on
+/// Base — because a wrong `terminal: true` ends a live investigation at the
+/// wrong wallet. This hook lets an operator add attribution they have actually
+/// verified (CEX deposit addresses in particular) without a code change.
+///
+/// Format: KNOWN_ADDRESSES_EXTRA='{"0xabc...":{"label":"Coinbase deposit","category":"cex","terminal":true}}'
+function loadExtraKnownAddresses(): Record<string, KnownAddressEntry> {
+  const raw = process.env.KNOWN_ADDRESSES_EXTRA;
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, Partial<KnownAddressEntry>>;
+    const out: Record<string, KnownAddressEntry> = {};
+    for (const [addr, entry] of Object.entries(parsed)) {
+      if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) {
+        console.warn(`[ChainReader] Ignoring malformed KNOWN_ADDRESSES_EXTRA key: ${addr}`);
+        continue;
+      }
+      if (!entry?.label || !entry?.category) {
+        console.warn(`[ChainReader] Ignoring KNOWN_ADDRESSES_EXTRA entry missing label/category: ${addr}`);
+        continue;
+      }
+      out[addr.toLowerCase()] = {
+        label: entry.label,
+        category: entry.category,
+        // Default to NON-terminal: a mislabelled terminal silently truncates
+        // an investigation, so ending a trace must be opted into explicitly.
+        terminal: entry.terminal === true,
+      };
+    }
+    if (Object.keys(out).length > 0) {
+      console.log(`[ChainReader] Loaded ${Object.keys(out).length} operator-supplied known addresses`);
+    }
+    return out;
+  } catch (err) {
+    console.error('[ChainReader] KNOWN_ADDRESSES_EXTRA is not valid JSON, ignoring:', err);
+    return {};
+  }
+}
+
+const EXTRA_KNOWN_ADDRESSES = loadExtraKnownAddresses();
+
 export function isKnownAddress(address: string): { known: boolean; label: string | null; category: AddressCategory | null; terminal: boolean } {
   const lower = address.toLowerCase();
-  for (const [addr, entry] of Object.entries(KNOWN_ADDRESSES)) {
-    if (addr.toLowerCase() === lower) {
-      return { known: true, label: entry.label, category: entry.category, terminal: entry.terminal };
-    }
+  // Operator-supplied entries win, so verified attribution can correct or
+  // extend the built-in table without editing code.
+  const entry = EXTRA_KNOWN_ADDRESSES[lower]
+    ?? Object.entries(KNOWN_ADDRESSES).find(([a]) => a.toLowerCase() === lower)?.[1];
+  if (entry) {
+    return { known: true, label: entry.label, category: entry.category, terminal: entry.terminal };
   }
   return { known: false, label: null, category: null, terminal: false };
 }

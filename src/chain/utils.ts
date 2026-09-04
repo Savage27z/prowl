@@ -37,26 +37,47 @@ export function checksumAddress(address: string): string {
 
 /// Total the funds an investigation actually touched.
 ///
-/// Summing every hop double-counts: 5 ETH relayed through 3 wallets is three
-/// hops of 5 ETH, but only 5 ETH was ever stolen. Funds are counted once per
-/// branch by taking the LARGEST transfer on each branch — a branch cannot move
-/// more than the amount that entered it — and amounts are grouped by asset so
-/// ETH and ERC-20 units are never added together.
+/// Funds must be counted once, so this models the trace as a flow tree rather
+/// than a flat list. Two traps:
+///
+///  1. Relay — 5 ETH moving A->B->C is three hops of 5 ETH but only 5 ETH
+///     stolen. Within one branch we therefore take the LARGEST hop, since a
+///     branch cannot carry more than what entered it.
+///  2. Split — when `main-0` later splits into `main-0-0` and `main-0-1`, the
+///     children carry the parent's money onward. Counting parent AND children
+///     double-counts, so only LEAF branches (those with no descendants) are
+///     summed. Their amounts already partition the parent's.
+///
+/// Amounts are grouped by asset so ETH and ERC-20 units are never added.
 export function summarizeTracedFunds(
   hops: { amount: string; branch_id?: string; asset_symbol?: string; asset_contract?: string }[],
 ): string {
   if (hops.length === 0) return '0 ETH';
 
-  // asset -> branch -> largest amount seen on that branch
+  const allBranches = new Set<string>();
+  for (const hop of hops) allBranches.add(hop.branch_id || 'main');
+
+  // A branch is a leaf when no other branch descends from it. Ids nest as
+  // `<parent>-<index>`, so the '-' separator makes this an exact prefix test
+  // ("main-01" is not a descendant of "main-0").
+  const isLeaf = (branch: string): boolean => {
+    for (const other of allBranches) {
+      if (other !== branch && other.startsWith(branch + '-')) return false;
+    }
+    return true;
+  };
+
+  // asset -> leaf branch -> largest amount seen on that branch
   const byAsset = new Map<string, Map<string, number>>();
 
   for (const hop of hops) {
     const amount = parseFloat(hop.amount);
     if (!isFinite(amount) || amount <= 0) continue;
+    const branch = hop.branch_id || 'main';
+    if (!isLeaf(branch)) continue; // parent money is counted by its children
     // Hops written before asset tracking are ETH by convention
     const symbol = hop.asset_symbol || 'ETH';
     const branches = byAsset.get(symbol) ?? new Map<string, number>();
-    const branch = hop.branch_id || 'main';
     branches.set(branch, Math.max(branches.get(branch) ?? 0, amount));
     byAsset.set(symbol, branches);
   }

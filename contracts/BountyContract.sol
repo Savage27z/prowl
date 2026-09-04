@@ -250,6 +250,10 @@ contract ProwlBounty {
         require(msg.sender == treasury, "Only treasury can arbitrate");
 
         if (agentWins) {
+            // Emit BEFORE settling: _releasePayout makes external calls, and
+            // an observer rebuilding state from events must see the dispute
+            // resolved rather than a bare payout with no arbitration record.
+            emit DisputeResolved(bountyId, true);
             // Reinstate and settle on the normal path
             bounty.status = Status.Submitted;
             _releasePayout(bountyId, bounty);
