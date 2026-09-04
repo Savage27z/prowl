@@ -5,8 +5,8 @@
 
 import { getSibylMemory } from '@/memory/sibyl';
 import { COLLECTIONS } from '@/memory/schemas';
-import type { Hop, Pattern, Analysis } from '@/memory/schemas';
-import { ChainReader } from '@/chain/reader';
+import type { Hop, Pattern, Analysis, MemoryDirective } from '@/memory/schemas';
+import { ChainReader, isKnownAddress } from '@/chain/reader';
 import { callAI } from '@/agents/ai';
 
 const chain = new ChainReader();
@@ -196,6 +196,23 @@ export class AnalystAgent {
         (aiThreat.confidenceBoost || 0)
     );
 
+    // Emit an explicit directive for the Tracer to consume on future cases.
+    // Only a verified terminal service (CEX/bridge) earns a skip — everything
+    // else stays traceable, since "low risk" means insufficient evidence.
+    const known = isKnownAddress(hop.to_address);
+    let directive: MemoryDirective | undefined;
+    if (known.known && known.terminal) {
+      directive = { action: 'skip', reason: 'verified_service', confidence: 0.98 };
+    } else if (riskLevel === 'high') {
+      directive = {
+        action: 'prioritize',
+        reason: similarCases.length > 0 ? 'cross_case_entity' : 'known_drainer',
+        confidence,
+      };
+    } else if (patternMatches.length > 0) {
+      directive = { action: 'prioritize', reason: 'laundering_pattern', confidence };
+    }
+
     return {
       case_id: caseId,
       hop_number: hop.hop_number,
@@ -205,6 +222,7 @@ export class AnalystAgent {
       similar_cases: similarCases,
       notes: notes.join('. ') || 'No significant patterns detected.',
       confidence,
+      ...(directive ? { directive } : {}),
     };
   }
 

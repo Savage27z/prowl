@@ -5,7 +5,7 @@
 
 import { getSibylMemory, waitForMemoryReady } from '@/memory/sibyl';
 import { COLLECTIONS } from '@/memory/schemas';
-import type { Hop, Case } from '@/memory/schemas';
+import type { Hop, Case, Analysis } from '@/memory/schemas';
 import { ChainReader, isKnownAddress } from '@/chain/reader';
 import { callAI } from '@/agents/ai';
 
@@ -406,14 +406,7 @@ Prioritize: large value transfers, round numbers, rapid timing, contract interac
   private async loadMemoryDirectives(): Promise<void> {
     try {
       // Load ALL past analyses (not just this case — cross-case intelligence)
-      const allAnalyses = await this.memory.query<{
-        address_analyzed: string;
-        risk_level: string;
-        notes: string;
-        case_id: string;
-        similar_cases: string[];
-        pattern_matches: string[];
-      }>(COLLECTIONS.ANALYSIS, {});
+      const allAnalyses = await this.memory.query<Analysis>(COLLECTIONS.ANALYSIS, {});
 
       // Load known patterns from memory
       const patterns = await this.memory.query<{
@@ -428,9 +421,30 @@ Prioritize: large value transfers, round numbers, rapid timing, contract interac
         return;
       }
 
-      // Build directive sets from past analyses
+      // Pass 1 — explicit directives. These are authoritative: an Analyst that
+      // deliberately marked an address beats any heuristic inferred below.
+      // Skipping REQUIRES such a directive. It is never inferred from
+      // risk_level ("low" means insufficient evidence, not "irrelevant") and
+      // never parsed out of free-text notes, whose wording/casing can drift.
       for (const analysis of allAnalyses) {
         const addr = analysis.address_analyzed.toLowerCase();
+        if (
+          analysis.directive?.action === 'skip' &&
+          analysis.directive.reason === 'verified_service' &&
+          analysis.directive.confidence >= 0.9
+        ) {
+          this.skipAddresses.add(addr);
+          this.memoryHits.push(
+            `MEMORY_SKIP: ${addr.slice(0, 10)}... directive=verified_service conf=${analysis.directive.confidence}`
+          );
+        }
+      }
+
+      // Pass 2 — heuristics. An explicitly skipped address is never promoted
+      // back into the prioritize set by a weaker signal.
+      for (const analysis of allAnalyses) {
+        const addr = analysis.address_analyzed.toLowerCase();
+        if (this.skipAddresses.has(addr)) continue;
 
         // High-risk addresses from prior cases → prioritize tracing through them
         if (analysis.risk_level === 'high') {
@@ -447,26 +461,13 @@ Prioritize: large value transfers, round numbers, rapid timing, contract interac
             `MEMORY_CROSS_CASE: ${addr.slice(0, 10)}... seen in ${analysis.similar_cases.length + 1} cases`
           );
         }
-
-        // Only skip addresses with strong evidence they are irrelevant:
-        // - Must be low-risk AND analyzed in 2+ prior cases (not just one)
-        // - "low" alone means "not enough evidence" — could still be the route
-        if (
-          (analysis.risk_level === 'low' || analysis.risk_level === 'none') &&
-          analysis.similar_cases && analysis.similar_cases.length >= 2 &&
-          analysis.notes?.includes('verified clean')
-        ) {
-          this.skipAddresses.add(addr);
-          this.memoryHits.push(
-            `MEMORY_SKIP: ${addr.slice(0, 10)}... verified clean across ${analysis.similar_cases.length + 1} cases`
-          );
-        }
       }
 
-      // Pattern-linked addresses → skip or prioritize based on pattern type
+      // Pattern-linked addresses → prioritize (still never overrides a skip)
       for (const pattern of patterns) {
         for (const addr of pattern.related_addresses) {
           const lower = addr.toLowerCase();
+          if (this.skipAddresses.has(lower)) continue;
           if (pattern.pattern_type === 'bridge_usage' || pattern.pattern_type === 'fund_splitting') {
             // Known laundering patterns → prioritize these addresses
             this.prioritizeAddresses.add(lower);
@@ -475,6 +476,12 @@ Prioritize: large value transfers, round numbers, rapid timing, contract interac
             );
           }
         }
+      }
+
+      // Invariant: the two sets must stay disjoint. Branch selection filters
+      // on both, so an address in each would be traced AND skipped.
+      for (const addr of this.skipAddresses) {
+        this.prioritizeAddresses.delete(addr);
       }
 
       if (this.memoryHits.length > 0) {
@@ -495,16 +502,19 @@ Prioritize: large value transfers, round numbers, rapid timing, contract interac
     });
   }
 
+  // Status is evaluated across ALL branches, not just the last hop traced.
+  // A CEX hit on branch 1 must not be erased by a dead end on branch 2 —
+  // branch execution order is arbitrary, so last-hop-wins loses real findings.
+  // Terminal destinations rank highest; a dead end only wins if nothing landed.
   private determineStatus(hops: Hop[]): TraceResult['status'] {
-    const lastHop = hops[hops.length - 1];
-    if (!lastHop) return 'dead_end';
+    if (hops.length === 0) return 'dead_end';
 
     // Only terminal destinations (CEX, bridge) resolve the case.
     // Non-terminal known addresses (DEX, mixer, token, infra) don't.
-    if (lastHop.flag_reason?.includes('Known cex:')) return 'exchange_found';
-    if (lastHop.flag_reason?.includes('Known bridge:')) return 'bridge_found';
+    if (hops.some((h) => h.flag_reason?.includes('Known cex:'))) return 'exchange_found';
+    if (hops.some((h) => h.flag_reason?.includes('Known bridge:'))) return 'bridge_found';
 
-    if (lastHop.flag_reason?.includes('Dead end')) return 'dead_end';
+    if (hops.some((h) => h.flag_reason?.includes('Dead end'))) return 'dead_end';
 
     return 'tracing';
   }

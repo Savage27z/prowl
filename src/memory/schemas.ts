@@ -52,6 +52,14 @@ export interface WatchlistEntry {
   alert_sent: boolean;
 }
 
+/// Explicit, machine-readable instruction the Analyst leaves for the Tracer.
+/// Preferred over parsing `notes` — free text changes with model wording.
+export interface MemoryDirective {
+  action: 'skip' | 'prioritize';
+  reason: 'verified_service' | 'known_drainer' | 'cross_case_entity' | 'laundering_pattern';
+  confidence: number;
+}
+
 export interface Analysis {
   case_id: string;
   hop_number: number;
@@ -61,6 +69,8 @@ export interface Analysis {
   similar_cases: string[];
   notes: string;
   confidence: number;
+  /// Optional structured directive consumed by Tracer.loadMemoryDirectives()
+  directive?: MemoryDirective;
 }
 
 // Collection names in Sibyl Memory

@@ -487,7 +487,11 @@ const dualMemory = {
 let _bridgeHydratePromise: Promise<void> | null = null;
 
 function hydrateFromBridge(): Promise<void> {
-  if (_bridgeHydratePromise || !BRIDGE_URL) return Promise.resolve();
+  // Return the in-flight promise so waitForMemoryReady() actually awaits it.
+  // Returning a fresh resolved promise here would let callers proceed before
+  // the bridge finished hydrating (the bug Redis hydration avoids).
+  if (_bridgeHydratePromise) return _bridgeHydratePromise;
+  if (!BRIDGE_URL) return Promise.resolve();
   _bridgeHydratePromise = (async () => {
     try {
       for (const collectionName of Object.values(COLLECTIONS)) {
