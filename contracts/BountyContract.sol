@@ -26,6 +26,8 @@ contract ProwlBounty {
     uint256 public openBountyCount;
     uint256 public constant MIN_STAKE = 0.001 ether;
     uint256 public constant TIMEOUT_PERIOD = 7 days;
+    /// @notice Window an agent has to submit a report before the claim lapses
+    uint256 public constant CLAIM_PERIOD = 3 days;
     uint256 public constant PROTOCOL_FEE_BPS = 500;  // 5% fee in basis points
     address public immutable treasury;                 // Protocol treasury
     uint256 public totalFeesCollected;                 // Cumulative protocol revenue
@@ -40,7 +42,14 @@ contract ProwlBounty {
     }
 
     mapping(uint256 => Bounty) public bounties;
-    mapping(address => uint256) public agentStakes;
+
+    /// @notice Stake held against a SPECIFIC bounty.
+    /// @dev Previously `mapping(address => uint256) agentStakes` pooled every
+    ///      stake an agent posted. Releasing one bounty then paid out that
+    ///      agent's entire pool and zeroed it, so the first payout drained
+    ///      stakes escrowed for other bounties and later ones refunded 0.
+    ///      Keying by bountyId keeps each escrow independent.
+    mapping(uint256 => uint256) public bountyStakes;
 
     // Events
     event BountyPosted(uint256 indexed bountyId, address indexed poster, uint256 reward);
@@ -50,6 +59,8 @@ contract ProwlBounty {
     event ProtocolFeeCollected(uint256 indexed bountyId, uint256 fee);
     event BountyDisputed(uint256 indexed bountyId);
     event BountyExpired(uint256 indexed bountyId);
+    event DisputeResolved(uint256 indexed bountyId, bool agentWon);
+    event RefundIssued(uint256 indexed bountyId, address indexed poster, uint256 amount);
 
     constructor(address _treasury) {
         require(_treasury != address(0), "Invalid treasury");
@@ -100,7 +111,7 @@ contract ProwlBounty {
         bounty.claimedBy = msg.sender;
         bounty.status = Status.Claimed;
         bounty.claimedAt = block.timestamp;
-        agentStakes[msg.sender] += msg.value;
+        bountyStakes[bountyId] = msg.value;
         openBountyCount--;
 
         emit BountyClaimed(bountyId, msg.sender);
@@ -128,18 +139,24 @@ contract ProwlBounty {
         Bounty storage bounty = bounties[bountyId];
         require(bounty.status == Status.Submitted, "Report not submitted");
         require(msg.sender == bounty.poster, "Only poster can approve");
+        _releasePayout(bountyId, bounty);
+    }
 
+    /// @dev Shared settlement path. Pays the agent their reward minus the
+    ///      protocol fee, returns only THIS bounty's stake, and forwards the
+    ///      fee to the treasury. Effects precede interactions throughout.
+    function _releasePayout(uint256 bountyId, Bounty storage bounty) private {
         bounty.status = Status.Approved;
         uint256 reward = bounty.reward;
         address agent = bounty.claimedBy;
-        uint256 stake = agentStakes[agent];
 
-        // Calculate protocol fee (5% of reward)
         uint256 fee = (reward * PROTOCOL_FEE_BPS) / 10000;
         uint256 agentReward = reward - fee;
 
-        // Effects before interaction (checks-effects-interactions)
-        agentStakes[agent] = 0;
+        // Effects — release only the stake escrowed for this bounty
+        uint256 stake = bountyStakes[bountyId];
+        bountyStakes[bountyId] = 0;
+        bounty.reward = 0;
         totalFeesCollected += fee;
         uint256 totalPayout = agentReward + stake;
 
@@ -176,33 +193,79 @@ contract ProwlBounty {
             block.timestamp >= bounty.submittedAt + TIMEOUT_PERIOD,
             "Timeout not reached"
         );
+        _releasePayout(bountyId, bounty);
+    }
 
-        bounty.status = Status.Approved;
-        uint256 reward = bounty.reward;
-        address agent = bounty.claimedBy;
-        uint256 stake = agentStakes[agent];
+    /// @notice Refund an unclaimed bounty to its poster
+    /// @dev Only while Open — once an agent has staked work against it the
+    ///      dispute and timeout paths govern settlement instead.
+    function cancelBounty(uint256 bountyId) external nonReentrant {
+        Bounty storage bounty = bounties[bountyId];
+        require(bounty.status == Status.Open, "Bounty not open");
+        require(msg.sender == bounty.poster, "Only poster can cancel");
 
-        // Calculate protocol fee
-        uint256 fee = (reward * PROTOCOL_FEE_BPS) / 10000;
-        uint256 agentReward = reward - fee;
+        bounty.status = Status.Expired;
+        uint256 refund = bounty.reward;
+        bounty.reward = 0;
+        openBountyCount--;
 
-        // Effects before interaction
-        agentStakes[agent] = 0;
-        totalFeesCollected += fee;
-        uint256 totalPayout = agentReward + stake;
+        (bool success, ) = payable(bounty.poster).call{value: refund}("");
+        require(success, "Refund failed");
 
-        // Interaction — pay agent
-        (bool success, ) = payable(agent).call{value: totalPayout}("");
-        require(success, "Payout failed");
+        emit BountyExpired(bountyId);
+        emit RefundIssued(bountyId, bounty.poster, refund);
+    }
 
-        // Interaction — pay treasury
-        if (fee > 0) {
-            (bool feeSuccess, ) = payable(treasury).call{value: fee}("");
-            require(feeSuccess, "Fee transfer failed");
-            emit ProtocolFeeCollected(bountyId, fee);
+    /// @notice Reclaim a bounty whose agent never submitted a report
+    /// @dev Closes the abandoned-claim lockup: previously a bounty stuck in
+    ///      Claimed had no exit, since resolveTimeout requires Submitted.
+    ///      The agent forfeits their stake to the poster for wasting the window.
+    function reclaimAbandoned(uint256 bountyId) external nonReentrant {
+        Bounty storage bounty = bounties[bountyId];
+        require(bounty.status == Status.Claimed, "Bounty not claimed");
+        require(
+            block.timestamp >= bounty.claimedAt + CLAIM_PERIOD,
+            "Claim period not elapsed"
+        );
+
+        bounty.status = Status.Expired;
+        uint256 refund = bounty.reward + bountyStakes[bountyId];
+        bounty.reward = 0;
+        bountyStakes[bountyId] = 0;
+
+        (bool success, ) = payable(bounty.poster).call{value: refund}("");
+        require(success, "Refund failed");
+
+        emit BountyExpired(bountyId);
+        emit RefundIssued(bountyId, bounty.poster, refund);
+    }
+
+    /// @notice Settle a disputed report
+    /// @dev Disputed was previously a terminal dead state with no exit, locking
+    ///      the reward and stake forever. The treasury arbitrates: uphold pays
+    ///      the agent normally, reject refunds the poster and forfeits the stake.
+    function resolveDispute(uint256 bountyId, bool agentWins) external nonReentrant {
+        Bounty storage bounty = bounties[bountyId];
+        require(bounty.status == Status.Disputed, "Bounty not disputed");
+        require(msg.sender == treasury, "Only treasury can arbitrate");
+
+        if (agentWins) {
+            // Reinstate and settle on the normal path
+            bounty.status = Status.Submitted;
+            _releasePayout(bountyId, bounty);
+            return;
         }
 
-        emit PayoutReleased(bountyId, agent, agentReward);
+        bounty.status = Status.Expired;
+        uint256 refund = bounty.reward + bountyStakes[bountyId];
+        bounty.reward = 0;
+        bountyStakes[bountyId] = 0;
+
+        (bool success, ) = payable(bounty.poster).call{value: refund}("");
+        require(success, "Refund failed");
+
+        emit DisputeResolved(bountyId, false);
+        emit RefundIssued(bountyId, bounty.poster, refund);
     }
 
     /// @notice Get bounty details

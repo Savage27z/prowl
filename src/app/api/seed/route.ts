@@ -41,7 +41,7 @@ const SEED_PATTERNS: Pattern[] = [
     first_seen_case: 'prowl-seed-002',
     times_matched: 3,
     confidence: 0.9,
-    related_addresses: ['0x3154cf16ccdb4c6d922629664174b904d80f2c36'],
+    related_addresses: ['0xDeaD000000000000000000000000000000000101'],
     bytecode_hash: null,
   },
   {
@@ -62,8 +62,8 @@ const SEED_PATTERNS: Pattern[] = [
     times_matched: 5,
     confidence: 0.95,
     related_addresses: [
-      '0x3154cf16ccdb4c6d922629664174b904d80f2c35',
-      '0x1ab4973a48dc892cd9971ece8e01dcc7688f8f23',
+      '0xDeaD000000000000000000000000000000000102',
+      '0xDeaD000000000000000000000000000000000103',
     ],
     bytecode_hash: null,
   },

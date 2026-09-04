@@ -359,9 +359,9 @@ const redisMemory = {
 const SEED_PATTERNS = [
   { pattern_id: 'pat-001', pattern_type: 'fund_splitting', description: 'Funds split into 5+ wallets within 1 hour of theft — classic laundering pattern', first_seen_case: 'prowl-seed-001', times_matched: 7, confidence: 0.85, related_addresses: ['0x1234567890abcdef1234567890abcdef12345678', '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd'], bytecode_hash: null },
   { pattern_id: 'pat-002', pattern_type: 'rapid_movement', description: '3+ hops within 10 minutes — rapid fund movement to evade tracking', first_seen_case: 'prowl-seed-001', times_matched: 4, confidence: 0.75, related_addresses: [], bytecode_hash: null },
-  { pattern_id: 'pat-003', pattern_type: 'bridge_usage', description: 'Funds sent to bridge contract — cross-chain escape attempt', first_seen_case: 'prowl-seed-002', times_matched: 3, confidence: 0.9, related_addresses: ['0x3154cf16ccdb4c6d922629664174b904d80f2c36'], bytecode_hash: null },
+  { pattern_id: 'pat-003', pattern_type: 'bridge_usage', description: 'Funds sent to bridge contract — cross-chain escape attempt', first_seen_case: 'prowl-seed-002', times_matched: 3, confidence: 0.9, related_addresses: ['0xDeaD000000000000000000000000000000000101'], bytecode_hash: null },
   { pattern_id: 'pat-004', pattern_type: 'contract_interaction', description: 'Funds routed through unverified contract — possible mixer or proxy', first_seen_case: 'prowl-seed-003', times_matched: 2, confidence: 0.7, related_addresses: [], bytecode_hash: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2' },
-  { pattern_id: 'pat-005', pattern_type: 'cex_deposit', description: 'Funds deposited to known CEX hot wallet — final destination', first_seen_case: 'prowl-seed-001', times_matched: 5, confidence: 0.95, related_addresses: ['0x3154cf16ccdb4c6d922629664174b904d80f2c35', '0x1ab4973a48dc892cd9971ece8e01dcc7688f8f23'], bytecode_hash: null },
+  { pattern_id: 'pat-005', pattern_type: 'cex_deposit', description: 'Funds deposited to known CEX hot wallet — final destination', first_seen_case: 'prowl-seed-001', times_matched: 5, confidence: 0.95, related_addresses: ['0xDeaD000000000000000000000000000000000102', '0xDeaD000000000000000000000000000000000103'], bytecode_hash: null },
 ];
 
 const SEED_CASES = [

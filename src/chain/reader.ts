@@ -3,17 +3,38 @@
 // Base chain data reader
 // Reads transaction data, wallet balances, and contract info from Base
 
-interface Transaction {
+/// A transferred asset. ETH and ERC-20 amounts are NOT interchangeable —
+/// 1000 USDC is not "more" than 0.5 ETH. Anything that ranks or sums
+/// transfers must respect this, so the unit travels with the value.
+export interface AssetAmount {
+  /// Human-readable amount in the asset's own units
+  value: string;
+  symbol: string;
+  /// 'native' for ETH, otherwise the ERC-20 contract address (lowercased)
+  contract: 'native' | string;
+  decimals: number;
+}
+
+export interface Transaction {
   hash: string;
   from: string;
   to: string;
+  /// Amount in the asset's own units. Read `asset` for what unit that is.
   value: string;
+  asset: AssetAmount;
   timestamp: string;
   blockNumber: number;
   gasUsed: string;
   input: string;
   isError: boolean;
 }
+
+const NATIVE_ETH = (value: string): AssetAmount => ({
+  value,
+  symbol: 'ETH',
+  contract: 'native',
+  decimals: 18,
+});
 
 interface WalletBalance {
   address: string;
@@ -57,12 +78,14 @@ export class ChainReader {
 
       const tx = data.result;
       const receipt = await this.getTransactionReceipt(txHash);
+      const ethValue = this.weiToEth(tx.value);
 
       return {
         hash: tx.hash,
         from: tx.from,
         to: tx.to || '',
-        value: this.weiToEth(tx.value),
+        value: ethValue,
+        asset: NATIVE_ETH(ethValue),
         timestamp: '', // need block timestamp
         blockNumber: parseInt(tx.blockNumber, 16),
         gasUsed: receipt?.gasUsed || '0',
@@ -125,11 +148,13 @@ export class ChainReader {
     const from = tx.from as Record<string, string> | null;
     const to = tx.to as Record<string, string> | null;
     const val = String(tx.value || '0');
+    const ethValue = this.weiToEth('0x' + BigInt(val).toString(16));
     return {
       hash: (tx.hash || tx.transaction_hash || '') as string,
       from: from?.hash || '',
       to: to?.hash || '',
-      value: this.weiToEth('0x' + BigInt(val).toString(16)),
+      value: ethValue,
+      asset: NATIVE_ETH(ethValue),
       timestamp: (tx.timestamp || new Date().toISOString()) as string,
       blockNumber: (tx.block_number || tx.block || 0) as number,
       gasUsed: String(tx.gas_used || '0'),
@@ -156,11 +181,13 @@ export class ChainReader {
       for (const tx of results) {
         // Only outgoing (from this address)
         if (tx.from?.toLowerCase() !== address.toLowerCase()) continue;
+        const v1Value = this.weiToEth('0x' + BigInt(tx.value || '0').toString(16));
         txs.push({
           hash: tx.hash || '',
           from: tx.from || '',
           to: tx.to || '',
-          value: this.weiToEth('0x' + BigInt(tx.value || '0').toString(16)),
+          value: v1Value,
+          asset: NATIVE_ETH(v1Value),
           timestamp: tx.timeStamp ? new Date(parseInt(tx.timeStamp, 10) * 1000).toISOString() : '',
           blockNumber: parseInt(tx.blockNumber || '0', 10),
           gasUsed: tx.gasUsed || '0',
@@ -176,7 +203,11 @@ export class ChainReader {
 
   // Get ALL outgoing transactions (regular + internal + token transfers)
   // Tries V2 first, falls back to V1 if V2 returns nothing
-  async getAllOutgoingTransactions(address: string, _startBlock = 0, excludeHashes?: Set<string>): Promise<Transaction[]> {
+  //
+  // `startBlock` bounds the trace to movements at or after the incident.
+  // Stolen funds cannot leave a wallet before they arrived, so transfers from
+  // earlier blocks are unrelated history and must not be followed.
+  async getAllOutgoingTransactions(address: string, startBlock = 0, excludeHashes?: Set<string>): Promise<Transaction[]> {
     const allTxs: Transaction[] = [];
     let v2Failed = false;
 
@@ -221,12 +252,18 @@ export class ChainReader {
         const token = item.token as Record<string, unknown> | null;
         const decimals = parseInt(String(token?.decimals || '18'), 10);
         const rawValue = total?.value || '0';
-        const tokenValue = (Number(BigInt(rawValue)) / Math.pow(10, decimals)).toFixed(6);
+        const tokenValue = this.scaleByDecimals(rawValue, decimals);
+        const symbol = String(token?.symbol || 'TOKEN');
+        const contract = String(
+          (token?.address_hash as string) || (token?.address as string) || '',
+        ).toLowerCase();
         allTxs.push({
           hash: ((item.tx_hash || item.transaction_hash || '') as string),
           from: from?.hash || '',
           to: to?.hash || '',
           value: tokenValue,
+          // Tagged as an ERC-20 so it is never ranked or summed against ETH
+          asset: { value: tokenValue, symbol, contract: contract || 'unknown', decimals },
           timestamp: (item.timestamp || new Date().toISOString()) as string,
           blockNumber: (item.block_number || 0) as number,
           gasUsed: '0',
@@ -244,11 +281,16 @@ export class ChainReader {
       allTxs.push(...v1Txs);
     }
 
-    // Deduplicate by tx hash + recipient, exclude specified hashes
+    // Deduplicate by tx hash + recipient, exclude specified hashes,
+    // and drop anything that predates the incident block.
     const seen = new Set<string>();
     const merged: Transaction[] = [];
     for (const tx of allTxs) {
       if (excludeHashes?.has(tx.hash.toLowerCase())) continue;
+      // Funds cannot leave before they arrived — ignore prior history.
+      // blockNumber 0 means the explorer omitted it; keep it rather than
+      // silently discarding a transfer we simply cannot date.
+      if (startBlock > 0 && tx.blockNumber > 0 && tx.blockNumber < startBlock) continue;
       const key = `${tx.hash}-${tx.to}`;
       if (!seen.has(key) && parseFloat(tx.value) >= 0) {
         seen.add(key);
@@ -256,10 +298,38 @@ export class ChainReader {
       }
     }
 
-    // Sort by value descending (follow the money)
-    merged.sort((a, b) => parseFloat(b.value) - parseFloat(a.value));
-    console.log(`[ChainReader] ${merged.length} merged outgoing txs (V2+V1 fallback)`);
+    // Rank "follow the money" WITHIN each asset — comparing 1000 USDC against
+    // 0.5 ETH is meaningless. Native ETH transfers are considered first, then
+    // token transfers, each ordered by their own magnitude.
+    merged.sort((a, b) => {
+      const aNative = a.asset.contract === 'native';
+      const bNative = b.asset.contract === 'native';
+      if (aNative !== bNative) return aNative ? -1 : 1;
+      if (a.asset.contract !== b.asset.contract) {
+        return a.asset.contract.localeCompare(b.asset.contract);
+      }
+      return parseFloat(b.value) - parseFloat(a.value);
+    });
+    console.log(`[ChainReader] ${merged.length} merged outgoing txs (V2+V1 fallback, startBlock=${startBlock})`);
     return merged;
+  }
+
+  /// Scale a raw integer token amount by its decimals without the precision
+  /// loss of Number(BigInt(raw)) — that overflows past 2^53 for 18-decimal
+  /// tokens, silently corrupting large transfer amounts.
+  private scaleByDecimals(raw: string, decimals: number): string {
+    try {
+      const value = BigInt(raw);
+      if (decimals <= 0) return value.toString();
+      const divisor = BigInt(10) ** BigInt(decimals);
+      const whole = value / divisor;
+      const frac = value % divisor;
+      if (frac === BigInt(0)) return whole.toString();
+      const fracStr = frac.toString().padStart(decimals, '0').slice(0, 6).replace(/0+$/, '');
+      return fracStr ? `${whole}.${fracStr}` : whole.toString();
+    } catch {
+      return '0';
+    }
   }
 
   // Get internal transactions by tx hash (legacy — kept for other callers)
@@ -400,52 +470,33 @@ export interface KnownAddressEntry {
   terminal: boolean;  // true = stop tracing here, false = annotate and continue
 }
 
-// Known addresses for detection — exchanges, bridges, and infrastructure on Base
+// Known addresses on BASE. Every entry below is a canonical OP-Stack
+// predeploy or a contract deployed at a well-known deterministic address, so
+// it can be checked against basescan.org directly.
+//
+// This list was deliberately trimmed. An earlier revision carried ~35 entries
+// copied from Ethereum mainnet (Binance/Kraken/Tornado hot wallets) plus one
+// fabricated "Base Bridge" address. Mislabelling an address is worse than not
+// knowing it: a wrong `terminal: true` ends a live investigation at the wrong
+// wallet. Only add an address here after confirming it on Base.
 export const KNOWN_ADDRESSES: Record<string, KnownAddressEntry> = {
-  // ── CEX Hot Wallets (terminal — funds reached an exchange) ──────
-  '0x3154cf16ccdb4c6d922629664174b904d80f2c35': { label: 'Binance Hot Wallet', category: 'cex', terminal: true },
-  '0x28c6c06298d514db089934071355e5743bf21d60': { label: 'Binance Hot Wallet 14', category: 'cex', terminal: true },
-  '0xdfd5293d8e347dfe59e90efd55b2956a1343963d': { label: 'Binance Hot Wallet 16', category: 'cex', terminal: true },
-  '0x21a31ee1afc51d94c2efccaa2092ad1028285549': { label: 'Binance Hot Wallet 20', category: 'cex', terminal: true },
-  '0xf89d7b9c864f589bbf53a82105107622b35eaa40': { label: 'Bybit Hot Wallet', category: 'cex', terminal: true },
-  '0x1ab4973a48dc892cd9971ece8e01dcc7688f8f23': { label: 'Coinbase', category: 'cex', terminal: true },
-  '0xa9d1e08c7793af67e9d92fe308d5697fb81d3e43': { label: 'Coinbase 10', category: 'cex', terminal: true },
-  '0x503828976d22510aad0201ac7ec88293211d23da': { label: 'Coinbase 2', category: 'cex', terminal: true },
-  '0xddfabcdc4d8ffc6d5beaf154f18b778f892a0740': { label: 'Coinbase 3', category: 'cex', terminal: true },
-  '0x71660c4005ba85c37ccec55d0c4493e66fe775d3': { label: 'Coinbase 4', category: 'cex', terminal: true },
-  '0xfbb1b73c4f0bda4f67dca266ce6ef42f520fbb98': { label: 'Bitget Hot Wallet', category: 'cex', terminal: true },
-  '0x5bdf85216ec1e38d6458c870992a69e38e03f7ef': { label: 'OKX', category: 'cex', terminal: true },
-  '0x6cc5f688a315f3dc28a7781717a9a798a59fda7b': { label: 'OKX 2', category: 'cex', terminal: true },
-  '0x98ec059dc3adfbdd63429454aeb0c990fba4a128': { label: 'KuCoin Hot Wallet', category: 'cex', terminal: true },
-  '0xd6216fc19db775df9774a6e33526131da7d19a2c': { label: 'KuCoin 2', category: 'cex', terminal: true },
-  '0x0d0707963952f2fba59dd06f2b425ace40b492fe': { label: 'Gate.io', category: 'cex', terminal: true },
-  '0x1c4b70a3968436b9a0a9cf5205c787eb81bb558c': { label: 'Gate.io 2', category: 'cex', terminal: true },
-  '0x0639556f03714a74a5feeaf5736a4a64ff70d921': { label: 'Kraken Hot Wallet', category: 'cex', terminal: true },
-  '0xa83b11093c8a88e1fc5b2f21fa89e1e7ae4ed67a': { label: 'HTX (Huobi)', category: 'cex', terminal: true },
-  '0x46340b20830761efd32832a74d7169b29feb9758': { label: 'Crypto.com', category: 'cex', terminal: true },
-  '0xcffad3200574698b78f32232aa9d63eabd290703': { label: 'Crypto.com 2', category: 'cex', terminal: true },
-  // ── Bridges (terminal — funds left the chain) ────────────────────
-  '0x3154cf16ccdb4c6d922629664174b904d80f2c36': { label: 'Base Bridge (Official)', category: 'bridge', terminal: true },
-  '0x49048044d57e1c92a77f79988d21fa8faf74e97e': { label: 'Base Portal (L1 Bridge)', category: 'bridge', terminal: true },
-  '0x3666f603cc164936c1b87e207f36beba4ac5f18a': { label: 'Base Standard Bridge', category: 'bridge', terminal: true },
-  '0xaf54be5b6eec24d6bfacf1cce4eaf680a8239398': { label: 'Across Bridge (Base)', category: 'bridge', terminal: true },
-  '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae': { label: 'LI.FI Diamond', category: 'bridge', terminal: true },
-  '0x2a3dd3eb832af982ec71669e178424b10dca2ede': { label: 'Stargate Finance (Base)', category: 'bridge', terminal: true },
-  '0xe4edb277e41dc89ab076a1f049f4a3efa700bce8': { label: 'Orbiter Finance', category: 'bridge', terminal: true },
-  // ── DEX Routers (NOT terminal — annotate and continue tracing) ──
-  '0x2626664c2603336e57b271c5c0b26f421741e481': { label: 'Uniswap Universal Router', category: 'dex', terminal: false },
-  '0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad': { label: 'Uniswap Universal Router V2', category: 'dex', terminal: false },
-  '0x1111111254eeb25477b68fb85ed929f73a960582': { label: '1inch Router v5', category: 'dex', terminal: false },
-  '0x6131b5fae19ea4f9d964eac0408e4408b66337b5': { label: 'KyberSwap', category: 'dex', terminal: false },
-  '0x6352a56caadc4f1e25cd6c75970fa768a3304e64': { label: 'OpenOcean Exchange', category: 'dex', terminal: false },
-  // ── Mixers (NOT terminal — flag high risk and continue) ──────────
-  '0xd90e2f925da726b50c4ed8d0fb90ad053324f31b': { label: 'Tornado Cash Router', category: 'mixer', terminal: false },
-  '0x722122df12d4e14e13ac3b6895a86e84145b6967': { label: 'Tornado Cash Proxy', category: 'mixer', terminal: false },
-  // ── Token contracts (NOT terminal — never treat as destination) ──
+  // ── Token contracts (NOT terminal — a token contract is never a destination)
   '0x4200000000000000000000000000000000000006': { label: 'WETH (Base)', category: 'token', terminal: false },
   '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913': { label: 'USDC (Base)', category: 'token', terminal: false },
-  // ── Infrastructure (NOT terminal — annotate only) ────────────────
-  '0x4200000000000000000000000000000000000015': { label: 'L1 Block (Base System)', category: 'infrastructure', terminal: false },
+
+  // ── Infrastructure (NOT terminal — OP-Stack predeploys, annotate only)
+  '0x4200000000000000000000000000000000000015': { label: 'L1Block (Base predeploy)', category: 'infrastructure', terminal: false },
+  '0x4200000000000000000000000000000000000010': { label: 'L2StandardBridge (Base predeploy)', category: 'infrastructure', terminal: false },
+  '0x4200000000000000000000000000000000000007': { label: 'L2CrossDomainMessenger (Base predeploy)', category: 'infrastructure', terminal: false },
+
+  // ── DEX routers (NOT terminal — funds pass through a swap and continue)
+  '0x2626664c2603336e57b271c5c0b26f421741e481': { label: 'Uniswap Universal Router (Base)', category: 'dex', terminal: false },
+  '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae': { label: 'LI.FI Diamond', category: 'dex', terminal: false },
+
+  // ── CEX deposit addresses (terminal) ────────────────────────────
+  // Intentionally empty. Exchange deposit addresses are per-user and rotate;
+  // hardcoding mainnet hot wallets produced false "case solved" results.
+  // Populate from a verified Base attribution source before relying on this.
 };
 
 export function isKnownAddress(address: string): { known: boolean; label: string | null; category: AddressCategory | null; terminal: boolean } {

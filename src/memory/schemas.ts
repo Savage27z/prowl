@@ -22,7 +22,13 @@ export interface Hop {
   hop_number: number;
   from_address: string;
   to_address: string;
+  /// Amount in `asset_symbol` units — NOT necessarily ETH.
   amount: string;
+  /// Unit for `amount`. Defaults to ETH for hops written before asset
+  /// tracking existed, so historical memory stays readable.
+  asset_symbol?: string;
+  /// 'native' for ETH, otherwise the ERC-20 contract address
+  asset_contract?: string;
   tx_hash: string;
   timestamp: string;
   is_split: boolean;

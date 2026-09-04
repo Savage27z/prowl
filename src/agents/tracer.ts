@@ -7,6 +7,7 @@ import { getSibylMemory, waitForMemoryReady } from '@/memory/sibyl';
 import { COLLECTIONS } from '@/memory/schemas';
 import type { Hop, Case, Analysis } from '@/memory/schemas';
 import { ChainReader, isKnownAddress } from '@/chain/reader';
+import { summarizeTracedFunds } from '@/chain/utils';
 import { callAI } from '@/agents/ai';
 
 const chain = new ChainReader();
@@ -25,6 +26,7 @@ export class TracerAgent {
   private totalHopsTraced = 0;   // global counter
   private traceDeadline = 0;     // timestamp ceiling (25s)
   private excludeHashes = new Set<string>(); // tx hashes to skip (prevent loops)
+  private incidentBlock = 0;     // trace floor — ignore transfers before the theft
   // Memory-driven directives from Analyst (cross-case intelligence)
   private skipAddresses = new Set<string>();  // addresses Analyst says to skip
   private prioritizeAddresses = new Set<string>(); // addresses Analyst says to prioritize
@@ -88,6 +90,8 @@ export class TracerAgent {
     this.traceDeadline = Date.now() + 25_000; // 25s hard ceiling
     // Exclude the incident tx itself to prevent circular tracing
     this.excludeHashes = new Set([incidentTxHash.toLowerCase()]);
+    // Bound the trace to movements at or after the theft
+    this.incidentBlock = tx.blockNumber || 0;
 
     // Trace the main branch
     const hops = await this.traceFromAddress(
@@ -164,7 +168,7 @@ export class TracerAgent {
     const isContractAddr = await chain.isContract(address);
 
     // Get ALL outgoing transactions (regular + internal + token transfers)
-    const outgoingTxs = await chain.getAllOutgoingTransactions(address, 0, this.excludeHashes);
+    const outgoingTxs = await chain.getAllOutgoingTransactions(address, this.incidentBlock, this.excludeHashes);
 
     if (outgoingTxs.length === 0) {
       // Dead end — funds sitting in this wallet
@@ -290,6 +294,8 @@ export class TracerAgent {
         from_address: address,
         to_address: tx.to,
         amount: tx.value,
+        asset_symbol: tx.asset.symbol,
+        asset_contract: tx.asset.contract,
         tx_hash: tx.hash,
         timestamp: tx.timestamp,
         is_split: isSplit,
@@ -494,10 +500,9 @@ Prioritize: large value transfers, round numbers, rapid timing, contract interac
   }
 
   private async updateCase(caseId: string, newHops: Hop[]): Promise<void> {
-    const totalAmount = newHops.reduce((sum, h) => sum + parseFloat(h.amount), 0);
     await this.memory.update(COLLECTIONS.CASES, caseId, {
       total_hops_traced: newHops.length,
-      total_funds_traced: `${totalAmount.toFixed(6)} ETH`,
+      total_funds_traced: summarizeTracedFunds(newHops),
       agents_involved: ['tracer'],
     });
   }

@@ -106,13 +106,19 @@ Case solved → patterns stored → next case starts smarter
 
 Prowl captures value at the resolution layer:
 
-| Event | What happens | Who pays |
-|-------|-------------|----------|
-| Bounty posted | Full reward locked in escrow | Victim/poster |
-| Case solved | 95% to investigating agent, **5% protocol fee** to treasury | Deducted from reward |
-| Case unsolved | Full refund to poster | Nobody |
+| Event | What happens | Contract function |
+|-------|-------------|-------------------|
+| Bounty posted | Full reward locked in escrow | `postBounty` |
+| Agent claims | Agent posts a stake against that specific bounty | `claimBounty` |
+| Case solved | 95% to agent + stake returned, **5% protocol fee** to treasury | `approvePayout` |
+| Poster unresponsive 7 days | Auto-approves on the same terms | `resolveTimeout` |
+| Never claimed | Full refund to poster | `cancelBounty` |
+| Claimed but abandoned 3 days | Reward **and** forfeited stake to poster | `reclaimAbandoned` |
+| Report disputed | Treasury arbitrates: uphold pays agent, reject refunds poster | `resolveDispute` |
 
 The 5% fee is enforced onchain by `ProwlBounty.sol` — no off-chain billing, no subscriptions. Revenue scales linearly with solved cases. Cross-case memory creates a flywheel: more solved cases = richer pattern database = faster solves = more throughput.
+
+Stakes are escrowed per bounty (`bountyStakes[bountyId]`), not pooled per agent, so settling one bounty can never draw on another's escrow.
 
 ---
 

@@ -35,6 +35,51 @@ export function checksumAddress(address: string): string {
   }
 }
 
+/// Total the funds an investigation actually touched.
+///
+/// Summing every hop double-counts: 5 ETH relayed through 3 wallets is three
+/// hops of 5 ETH, but only 5 ETH was ever stolen. Funds are counted once per
+/// branch by taking the LARGEST transfer on each branch — a branch cannot move
+/// more than the amount that entered it — and amounts are grouped by asset so
+/// ETH and ERC-20 units are never added together.
+export function summarizeTracedFunds(
+  hops: { amount: string; branch_id?: string; asset_symbol?: string; asset_contract?: string }[],
+): string {
+  if (hops.length === 0) return '0 ETH';
+
+  // asset -> branch -> largest amount seen on that branch
+  const byAsset = new Map<string, Map<string, number>>();
+
+  for (const hop of hops) {
+    const amount = parseFloat(hop.amount);
+    if (!isFinite(amount) || amount <= 0) continue;
+    // Hops written before asset tracking are ETH by convention
+    const symbol = hop.asset_symbol || 'ETH';
+    const branches = byAsset.get(symbol) ?? new Map<string, number>();
+    const branch = hop.branch_id || 'main';
+    branches.set(branch, Math.max(branches.get(branch) ?? 0, amount));
+    byAsset.set(symbol, branches);
+  }
+
+  if (byAsset.size === 0) return '0 ETH';
+
+  const parts: string[] = [];
+  // ETH first, then other assets alphabetically, so output is stable
+  const symbols = [...byAsset.keys()].sort((a, b) => {
+    if (a === 'ETH') return -1;
+    if (b === 'ETH') return 1;
+    return a.localeCompare(b);
+  });
+
+  for (const symbol of symbols) {
+    const total = [...byAsset.get(symbol)!.values()].reduce((sum, v) => sum + v, 0);
+    const formatted = symbol === 'ETH' ? total.toFixed(6) : String(parseFloat(total.toFixed(6)));
+    parts.push(`${formatted} ${symbol}`);
+  }
+
+  return parts.join(' + ');
+}
+
 export function shortenTxHash(hash: string, chars = 8): string {
   if (!hash) return '';
   return `${hash.slice(0, chars + 2)}...${hash.slice(-chars)}`;

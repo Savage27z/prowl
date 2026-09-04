@@ -20,23 +20,29 @@ const BIG = '0x4444444444444444444444444444444444444444';
 const MID = '0x5555555555555555555555555555555555555555';
 const INCIDENT_TX = '0x' + 'ab'.repeat(32);
 
+const eth = (value: string) => ({ value, symbol: 'ETH', contract: 'native' as const, decimals: 18 });
+
 // The thief splits funds three ways. DRAINER receives the SMALLEST amount,
-// so any value-based strategy ranks it last.
+// so any value-based strategy ranks it last. All three are ETH, so they are
+// legitimately comparable — the point of the test is ordering, not units.
 const OUTGOING = [
-  { hash: '0x' + '11'.repeat(32), from: THIEF, to: BIG, value: '5.0', timestamp: '2026-09-01T00:00:00Z', blockNumber: 1, gasUsed: '0', input: '0x', isError: false },
-  { hash: '0x' + '22'.repeat(32), from: THIEF, to: MID, value: '2.0', timestamp: '2026-09-01T00:01:00Z', blockNumber: 2, gasUsed: '0', input: '0x', isError: false },
-  { hash: '0x' + '33'.repeat(32), from: THIEF, to: DRAINER, value: '0.5', timestamp: '2026-09-01T00:02:00Z', blockNumber: 3, gasUsed: '0', input: '0x', isError: false },
+  { hash: '0x' + '11'.repeat(32), from: THIEF, to: BIG, value: '5.0', asset: eth('5.0'), timestamp: '2026-09-01T00:00:00Z', blockNumber: 10, gasUsed: '0', input: '0x', isError: false },
+  { hash: '0x' + '22'.repeat(32), from: THIEF, to: MID, value: '2.0', asset: eth('2.0'), timestamp: '2026-09-01T00:01:00Z', blockNumber: 11, gasUsed: '0', input: '0x', isError: false },
+  { hash: '0x' + '33'.repeat(32), from: THIEF, to: DRAINER, value: '0.5', asset: eth('0.5'), timestamp: '2026-09-01T00:02:00Z', blockNumber: 12, gasUsed: '0', input: '0x', isError: false },
 ];
 
 vi.mock('@/chain/reader', () => ({
   ChainReader: class {
     async getTransaction(hash: string) {
-      return { hash, from: VICTIM, to: THIEF, value: '7.5', timestamp: '2026-09-01T00:00:00Z', blockNumber: 1, gasUsed: '0', input: '0x', isError: false };
+      return { hash, from: VICTIM, to: THIEF, value: '7.5', asset: eth('7.5'), timestamp: '2026-09-01T00:00:00Z', blockNumber: 9, gasUsed: '0', input: '0x', isError: false };
     }
     // Only the thief has outgoing transfers; every downstream address is a
     // dead end, which keeps the trace shallow and deterministic.
-    async getAllOutgoingTransactions(address: string) {
-      return address.toLowerCase() === THIEF.toLowerCase() ? OUTGOING : [];
+    // Honours startBlock the way the real reader does, so the incident-block
+    // bound is exercised rather than bypassed.
+    async getAllOutgoingTransactions(address: string, startBlock = 0) {
+      if (address.toLowerCase() !== THIEF.toLowerCase()) return [];
+      return OUTGOING.filter((t) => startBlock === 0 || t.blockNumber >= startBlock);
     }
     async isContract() { return false; }
     async getBalance(address: string) { return { address, balance: '0' }; }
@@ -134,6 +140,38 @@ describe('TracerAgent — memory changes real branch selection', () => {
     // BIG was skipped despite being the largest transfer.
     expect(branches).not.toContain(BIG.toLowerCase());
     expect(branches).toContain(MID.toLowerCase());
+  });
+
+  it('relayed funds are counted once, not once per hop', async () => {
+    const { summarizeTracedFunds } = await import('@/chain/utils');
+
+    // 5 ETH relayed A -> B -> C -> D on a single branch. Only 5 ETH was
+    // stolen; naively summing the hops would report 15 ETH.
+    const relay = [
+      { amount: '5.0', branch_id: 'main', asset_symbol: 'ETH', asset_contract: 'native' },
+      { amount: '5.0', branch_id: 'main', asset_symbol: 'ETH', asset_contract: 'native' },
+      { amount: '5.0', branch_id: 'main', asset_symbol: 'ETH', asset_contract: 'native' },
+    ];
+    expect(summarizeTracedFunds(relay)).toBe('5.000000 ETH');
+  });
+
+  it('separate branches add up, and assets never mix', async () => {
+    const { summarizeTracedFunds } = await import('@/chain/utils');
+
+    // Two distinct branches of ETH plus a token transfer.
+    const split = [
+      { amount: '3.0', branch_id: 'main-0', asset_symbol: 'ETH', asset_contract: 'native' },
+      { amount: '3.0', branch_id: 'main-0', asset_symbol: 'ETH', asset_contract: 'native' },
+      { amount: '2.0', branch_id: 'main-1', asset_symbol: 'ETH', asset_contract: 'native' },
+      { amount: '1000', branch_id: 'main-2', asset_symbol: 'USDC', asset_contract: '0xusdc' },
+    ];
+    const summary = summarizeTracedFunds(split);
+
+    // 3 + 2 = 5 ETH across two branches, USDC reported separately.
+    expect(summary).toContain('5.000000 ETH');
+    expect(summary).toContain('1000 USDC');
+    // The token amount must never be folded into the ETH figure.
+    expect(summary).not.toContain('1005');
   });
 
   it('low risk alone does NOT cause a skip (insufficient evidence)', async () => {

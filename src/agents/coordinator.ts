@@ -349,9 +349,10 @@ export class Coordinator {
 
     for (const c of cases) {
       totalHops += c.total_hops_traced || 0;
-      // Parse funds like "2.0 ETH" → 2.0
-      const fundsMatch = c.total_funds_traced?.match(/([\d.]+)/);
-      if (fundsMatch) totalFundsEth += parseFloat(fundsMatch[1]);
+      // Extract only the ETH component — total_funds_traced can read
+      // "1.5 ETH + 1000 USDC", and token amounts must not be added as ETH.
+      const ethMatch = c.total_funds_traced?.match(/([\d.]+)\s*ETH/);
+      if (ethMatch) totalFundsEth += parseFloat(ethMatch[1]);
       for (const agent of c.agents_involved || []) {
         agentCounts[agent] = (agentCounts[agent] || 0) + 1;
       }

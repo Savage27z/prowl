@@ -6,6 +6,7 @@ import { useAccount, useWriteContract, useWaitForTransactionReceipt, useSwitchCh
 import { baseSepolia } from 'wagmi/chains';
 import DashboardShell from '@/components/DashboardShell';
 import { getBountyContractConfig } from '@/chain/contracts';
+import { summarizeTracedFunds } from '@/chain/utils';
 
 /* ── Types ── */
 
@@ -32,6 +33,10 @@ interface HopData {
   from_address: string;
   to_address: string;
   amount: string;
+  /// Unit for `amount` — absent on hops written before asset tracking
+  asset_symbol?: string;
+  asset_contract?: string;
+  branch_id?: string;
   tx_hash: string;
   timestamp: string;
   is_split: boolean;
@@ -540,8 +545,9 @@ function ReportView({ caseData, hops, analyses, feed }: {
   // Flagged hops
   const flaggedHops = hops.filter(h => h.flagged && h.flag_reason);
 
-  // Total ETH moved
-  const totalEth = hops.reduce((sum, h) => sum + parseFloat(h.amount || '0'), 0);
+  // Funds traced — counted once per branch, grouped by asset.
+  // Summing every hop would double-count funds relayed through wallets.
+  const tracedFunds = summarizeTracedFunds(hops);
 
   // Splits count
   const splits = hops.filter(h => h.is_split).length;
@@ -590,8 +596,8 @@ function ReportView({ caseData, hops, analyses, feed }: {
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-neutral-600)' }}>Hops traced</div>
             </div>
             <div>
-              <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22, fontVariantNumeric: 'tabular-nums' }}>{totalEth.toFixed(6)}</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-neutral-600)' }}>ETH moved</div>
+              <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22, fontVariantNumeric: 'tabular-nums' }}>{tracedFunds}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-neutral-600)' }}>Funds traced</div>
             </div>
             <div>
               <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22, fontVariantNumeric: 'tabular-nums' }}>{addressSet.size}</div>
