@@ -64,9 +64,49 @@ const BOUNTY_CONTRACT_ABI = [
           { name: 'status', type: 'uint8' },
           { name: 'createdAt', type: 'uint256' },
           { name: 'claimedAt', type: 'uint256' },
+          // Must match Bounty struct arity exactly or decoding fails
+          { name: 'submittedAt', type: 'uint256' },
         ],
       },
     ],
+  },
+  {
+    name: 'resolveTimeout',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'bountyId', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    name: 'cancelBounty',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'bountyId', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    name: 'reclaimAbandoned',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'bountyId', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    name: 'resolveDispute',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'bountyId', type: 'uint256' },
+      { name: 'agentWins', type: 'bool' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'bountyStakes',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: '', type: 'uint256' }],
+    outputs: [{ name: '', type: 'uint256' }],
   },
   {
     name: 'BountyPosted',
@@ -99,6 +139,28 @@ const BOUNTY_CONTRACT_ABI = [
     inputs: [
       { name: 'bountyId', type: 'uint256', indexed: true },
       { name: 'agent', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    name: 'BountyExpired',
+    type: 'event',
+    inputs: [{ name: 'bountyId', type: 'uint256', indexed: true }],
+  },
+  {
+    name: 'DisputeResolved',
+    type: 'event',
+    inputs: [
+      { name: 'bountyId', type: 'uint256', indexed: true },
+      { name: 'agentWon', type: 'bool', indexed: false },
+    ],
+  },
+  {
+    name: 'RefundIssued',
+    type: 'event',
+    inputs: [
+      { name: 'bountyId', type: 'uint256', indexed: true },
+      { name: 'poster', type: 'address', indexed: true },
       { name: 'amount', type: 'uint256', indexed: false },
     ],
   },
