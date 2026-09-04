@@ -56,7 +56,16 @@ export class AnalystAgent {
     const detectedPatterns = await this.detectPatterns(hops, knownPatterns);
     newPatterns.push(...detectedPatterns);
 
+    // One analysis per unique destination. Hop 0 (victim -> suspect) and the
+    // terminal hop share a to_address, which otherwise yields two duplicate
+    // analyses of the same address and double-counts the high-risk tally.
+    const analyzedAddresses = new Set<string>();
+
     for (const hop of hops) {
+      const addressKey = hop.to_address.toLowerCase();
+      if (analyzedAddresses.has(addressKey)) continue;
+      analyzedAddresses.add(addressKey);
+
       const analysis = await this.analyzeHop(
         caseId,
         hop,
@@ -132,14 +141,17 @@ export class AnalystAgent {
     }
 
     // Cross-reference with past analyses (similar addresses)
+    const seenCases = new Set<string>();
     for (const pastAnalysis of pastAnalyses) {
-      if (pastAnalysis.case_id !== caseId) {
-        if (pastAnalysis.address_analyzed.toLowerCase() === hop.to_address.toLowerCase()) {
-          similarCases.push(pastAnalysis.case_id);
-          notes.push(`Address ${hop.to_address.slice(0, 10)}... appeared in case ${pastAnalysis.case_id}`);
-          riskLevel = 'high';
-        }
-      }
+      if (pastAnalysis.case_id === caseId) continue;
+      if (pastAnalysis.address_analyzed.toLowerCase() !== hop.to_address.toLowerCase()) continue;
+      // A prior case may hold several analyses of the same address; count the
+      // case once, or it is reported repeatedly in the same sentence.
+      if (seenCases.has(pastAnalysis.case_id)) continue;
+      seenCases.add(pastAnalysis.case_id);
+      similarCases.push(pastAnalysis.case_id);
+      notes.push(`Address ${hop.to_address.slice(0, 10)}... appeared in case ${pastAnalysis.case_id}`);
+      riskLevel = 'high';
     }
 
     // Check if address is a contract
