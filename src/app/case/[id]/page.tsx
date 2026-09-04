@@ -1331,12 +1331,15 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: '9.5px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-neutral-600)' }}>
                       Hop {hop.hop_number} {hop.is_split && '· SPLIT'}
                     </span>
-                    <span style={{ fontFamily: 'var(--font-heading)', fontSize: 14 }}>{hop.amount} ETH</span>
+                    <span style={{ fontFamily: 'var(--font-heading)', fontSize: 14 }}>{hop.amount} {hop.asset_symbol ?? 'ETH'}</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--color-accent-700)' }}>{truncate(hop.from_address, 6)}</span>
                     <span style={{ color: 'var(--color-neutral-400)', fontSize: 10 }}>→</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--color-accent-700)' }}>{truncate(hop.to_address, 6)}</span>
+                    {/* from == to marks the end of the trail, not a self-send */}
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: isTerminalHop(hop) ? 'var(--color-neutral-600)' : 'var(--color-accent-700)' }}>
+                      {isTerminalHop(hop) ? '— trail ends —' : truncate(hop.to_address, 6)}
+                    </span>
                   </div>
                   {hop.tx_hash && (
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--color-neutral-600)', marginTop: 3 }}>
