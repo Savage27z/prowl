@@ -133,7 +133,7 @@ export class MonitorAgent {
     }
 
     const summary = alerts.length > 0
-      ? `🚨 Movement detected in ${alerts.length} watched wallet(s)! Tracer should resume investigation.`
+      ? `ALERT: Movement detected in ${alerts.length} watched wallet(s). Tracer should resume investigation.`
       : `Checked ${watchlist.length} addresses — no new activity.`;
 
     return {
@@ -183,7 +183,7 @@ export class MonitorAgent {
       watchedAddresses: watchlist.length,
       newAlerts: alerts,
       summary: alerts.length > 0
-        ? `🚨 ${alerts.length} address(es) moved funds in case ${caseId}!`
+        ? `ALERT: ${alerts.length} address(es) moved funds in case ${caseId}.`
         : `${watchlist.length} address(es) still dormant for case ${caseId}.`,
     };
   }

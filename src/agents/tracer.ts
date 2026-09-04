@@ -300,6 +300,17 @@ export class TracerAgent {
 
   // Resume tracing from a Monitor alert
   async resumeTrace(caseId: string, address: string): Promise<TraceResult> {
+    // Ensure memory is hydrated + load cross-case directives
+    this.skipAddresses.clear();
+    this.prioritizeAddresses.clear();
+    this.memoryHits = [];
+    await waitForMemoryReady();
+    await this.loadMemoryDirectives();
+
+    // Reset per-investigation limits
+    this.totalHopsTraced = 0;
+    this.traceDeadline = Date.now() + 25_000;
+    this.excludeHashes = new Set();
 
     // Get existing hops to determine hop number
     const existingHops = await this.memory.query<Hop>(COLLECTIONS.HOPS, {
