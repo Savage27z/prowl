@@ -1,7 +1,7 @@
 // Patterns API — retrieve detected attack patterns
 // Pattern Library API — query learned patterns
 import { NextResponse } from 'next/server';
-import { getSibylMemory } from '@/memory/sibyl';
+import { getSibylMemory, waitForMemoryReady } from '@/memory/sibyl';
 import { COLLECTIONS } from '@/memory/schemas';
 import type { Pattern } from '@/memory/schemas';
 import { requireAuth } from '@/lib/auth';
@@ -12,6 +12,10 @@ export async function GET() {
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
+
+    // Module-scope hydration is not awaited; without this a cold lambda
+    // serves an empty store and the UI renders zeros.
+    await waitForMemoryReady();
     const patterns = await memory.query<Pattern>(COLLECTIONS.PATTERNS, {
       sort: { field: 'times_matched', order: 'desc' },
     });

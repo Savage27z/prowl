@@ -3,7 +3,7 @@
 // Seeds patterns + solved cases so the Analyst has data to match against
 
 import { NextResponse } from 'next/server';
-import { getSibylMemory } from '@/memory/sibyl';
+import { getSibylMemory, waitForMemoryReady } from '@/memory/sibyl';
 import { COLLECTIONS } from '@/memory/schemas';
 import type { Pattern, Case } from '@/memory/schemas';
 import { requireAuth } from '@/lib/auth';
@@ -115,6 +115,10 @@ export async function POST() {
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
+
+    // Module-scope hydration is not awaited; without this a cold lambda
+    // serves an empty store and the UI renders zeros.
+    await waitForMemoryReady();
     let patternsStored = 0;
     let casesStored = 0;
 

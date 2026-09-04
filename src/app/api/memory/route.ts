@@ -3,7 +3,7 @@
 // Used by the Memory debug page and deletion test demo
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getSibylMemory, getMemoryMode } from '@/memory/sibyl';
+import { getSibylMemory, waitForMemoryReady, getMemoryMode } from '@/memory/sibyl';
 import { COLLECTIONS } from '@/memory/schemas';
 import { requireAuth } from '@/lib/auth';
 
@@ -14,6 +14,10 @@ export async function GET() {
   try {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
+
+    // Module-scope hydration is not awaited; without this a cold lambda
+    // serves an empty store and the UI renders zeros.
+    await waitForMemoryReady();
     const health = await memory.healthCheck();
     const collections = memory.dump();
     const memoryMode = getMemoryMode();
@@ -33,6 +37,10 @@ export async function GET() {
 export async function DELETE(req: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
+
+  // Module-scope hydration is not awaited; without this a cold lambda
+  // serves an empty store and the UI renders zeros.
+  await waitForMemoryReady();
 
   const confirm = req.nextUrl.searchParams.get('confirm');
   if (confirm !== 'yes') {
