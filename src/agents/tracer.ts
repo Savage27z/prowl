@@ -529,9 +529,16 @@ Prioritize: large value transfers, round numbers, rapid timing, contract interac
     hops: Hop[],
     status: string
   ): Promise<string> {
-    const hopSummary = hops.map((h) =>
-      `Hop ${h.hop_number}: ${h.from_address.slice(0, 8)}... → ${h.to_address.slice(0, 8)}... (${h.amount} ETH)${h.flagged ? ` [FLAGGED: ${h.flag_reason}]` : ''}`
-    ).join('\n');
+    // A terminal hop (dead end / known destination) stores from == to as a
+    // sentinel — no transfer occurred. Render those as an endpoint, never as
+    // a movement, or the model reports a self-send that never happened.
+    const hopSummary = hops.map((h) => {
+      const unit = h.asset_symbol ?? 'ETH';
+      if (h.from_address.toLowerCase() === h.to_address.toLowerCase()) {
+        return `Hop ${h.hop_number}: TRAIL ENDS at ${h.from_address.slice(0, 8)}... holding ${h.amount} ${unit} — no onward transfer${h.flag_reason ? ` [${h.flag_reason}]` : ''}`;
+      }
+      return `Hop ${h.hop_number}: ${h.from_address.slice(0, 8)}... → ${h.to_address.slice(0, 8)}... (${h.amount} ${unit})${h.flagged ? ` [FLAGGED: ${h.flag_reason}]` : ''}`;
+    }).join('\n');
 
     // Include memory state in the summary for transparency
     const memoryContext = this.memoryHits.length > 0
@@ -548,7 +555,10 @@ ${memoryContext}
 Hop trail:
 ${hopSummary}
 
-Provide a concise 2-3 sentence summary of where the funds went and any notable patterns.`;
+Provide a concise 2-3 sentence summary of where the funds went and any notable patterns.
+Report only movements listed above. A line marked "TRAIL ENDS" means the funds
+stopped there and were never moved again — do NOT describe it as a transfer,
+self-send, or internal transaction.`;
 
     return callAI(prompt);
   }

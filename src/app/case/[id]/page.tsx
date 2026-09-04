@@ -44,6 +44,13 @@ interface HopData {
   flag_reason: string | null;
 }
 
+/// A terminal hop stores from == to as a sentinel meaning "the trail stops
+/// here" — no transfer took place. Rendering it as from → to reads as a
+/// self-send that never happened.
+function isTerminalHop(hop: { from_address: string; to_address: string }): boolean {
+  return hop.from_address.toLowerCase() === hop.to_address.toLowerCase();
+}
+
 interface AnalysisData {
   case_id: string;
   address_analyzed: string;
@@ -689,8 +696,9 @@ function ReportView({ caseData, hops, analyses, feed }: {
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--color-accent-700)' }}>
                 {truncate(hop.from_address, 6)}
               </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--color-accent-700)' }}>
-                {truncate(hop.to_address, 6)}
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: isTerminalHop(hop) ? 'var(--color-neutral-600)' : 'var(--color-accent-700)' }}>
+                {/* from == to is the terminal sentinel — no transfer occurred */}
+                {isTerminalHop(hop) ? '— trail ends —' : truncate(hop.to_address, 6)}
               </span>
               <span style={{ fontFamily: 'var(--font-heading)', fontSize: 13, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                 {parseFloat(hop.amount).toFixed(6)}
@@ -715,7 +723,9 @@ function ReportView({ caseData, hops, analyses, feed }: {
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-accent-700)', marginBottom: 2 }}>{hop.flag_reason}</div>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--color-neutral-600)' }}>
-                    Hop {hop.hop_number}: {truncate(hop.from_address, 6)} → {truncate(hop.to_address, 6)}
+                    {isTerminalHop(hop)
+                      ? `Hop ${hop.hop_number}: funds held at ${truncate(hop.from_address, 6)}`
+                      : `Hop ${hop.hop_number}: ${truncate(hop.from_address, 6)} → ${truncate(hop.to_address, 6)}`}
                   </div>
                 </div>
               </div>
