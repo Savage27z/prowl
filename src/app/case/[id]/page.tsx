@@ -360,7 +360,7 @@ function FundFlowGraph({ hops, analyses }: { hops: HopData[]; analyses: Analysis
         })}
 
         {/* Nodes */}
-        {nodes.map((node, idx) => {
+        {nodes.map((node, _idx) => {
           let nx: number, ny: number;
           if (isSmall && nodes.length === 1) {
             nx = graphW / 2;
@@ -977,7 +977,7 @@ export default function CaseView({ params }: { params: Promise<{ id: string }> }
   }, [id, feed.length]);
 
   // Initial fetch
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]); // eslint-disable-line react-hooks/set-state-in-effect -- fetch on mount
 
   // Auto-scroll feed
   useEffect(() => {

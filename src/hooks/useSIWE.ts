@@ -43,7 +43,7 @@ export function useSIWE() {
   // Clear session when wallet disconnects
   useEffect(() => {
     if (!isConnected && session) {
-      fetch('/api/auth/session', { method: 'DELETE' }).then(() => setSession(null)); // eslint-disable-line react-hooks/set-state-in-effect
+      fetch('/api/auth/session', { method: 'DELETE' }).then(() => setSession(null));
     }
   }, [isConnected, session]);
 

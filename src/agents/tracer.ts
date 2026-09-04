@@ -3,7 +3,7 @@
 // Follows the money trail across wallets on Base
 // Writes hop data to Sibyl Memory for Analyst and Monitor to read
 
-import { getSibylMemory } from '@/memory/sibyl';
+import { getSibylMemory, waitForMemoryReady } from '@/memory/sibyl';
 import { COLLECTIONS } from '@/memory/schemas';
 import type { Hop, Case } from '@/memory/schemas';
 import { ChainReader, isKnownAddress } from '@/chain/reader';
@@ -50,6 +50,8 @@ export class TracerAgent {
     this.skipAddresses.clear();
     this.prioritizeAddresses.clear();
     this.memoryHits = [];
+    // Ensure memory is fully hydrated before loading cross-case directives
+    await waitForMemoryReady();
     await this.loadMemoryDirectives();
 
     // Determine where to start tracing:
@@ -411,6 +413,14 @@ Prioritize: large value transfers, round numbers, rapid timing, contract interac
           this.prioritizeAddresses.add(addr);
           this.memoryHits.push(
             `MEMORY_CROSS_CASE: ${addr.slice(0, 10)}... seen in ${analysis.similar_cases.length + 1} cases`
+          );
+        }
+
+        // Low-risk / clean addresses from prior cases → skip (dead ends)
+        if (analysis.risk_level === 'low' || analysis.risk_level === 'none') {
+          this.skipAddresses.add(addr);
+          this.memoryHits.push(
+            `MEMORY_SKIP: ${addr.slice(0, 10)}... marked ${analysis.risk_level} in case ${analysis.case_id}`
           );
         }
       }

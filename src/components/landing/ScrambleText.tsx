@@ -15,7 +15,8 @@ export default function ScrambleText({ text, isHovered, className }: ScrambleTex
   const [display, setDisplay] = useState(text);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => { // eslint-disable-line react-hooks/set-state-in-effect -- setState in interval/else is correct
+  /* eslint-disable react-hooks/set-state-in-effect -- setState in interval/else is correct */
+  useEffect(() => {
     if (isHovered) {
       let frame = 0;
       intervalRef.current = setInterval(() => {
@@ -49,6 +50,7 @@ export default function ScrambleText({ text, isHovered, className }: ScrambleTex
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [isHovered, text]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return <span className={className}>{display}</span>;
 }

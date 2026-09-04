@@ -60,7 +60,7 @@ export default function Memory() {
   const [entries, setEntries] = useState<MemoryEntry[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [memoryMode, setMemoryMode] = useState<{ mode: string; bridgeUrl: string | null } | null>(null);
+  const [, setMemoryMode] = useState<{ mode: string; bridgeUrl: string | null } | null>(null);
   const [wasCleared, setWasCleared] = useState(false);
 
   const fetchMemory = useCallback(async () => {
@@ -150,7 +150,7 @@ export default function Memory() {
     setWasCleared(true);
   }, []);
 
-  useEffect(() => { fetchMemory(); }, [fetchMemory]);
+  useEffect(() => { fetchMemory(); }, [fetchMemory]); // eslint-disable-line react-hooks/set-state-in-effect -- fetch on mount
 
   const filtered = search
     ? entries.filter(e =>

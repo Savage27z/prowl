@@ -37,6 +37,7 @@ type Theme = 'light' | 'dark' | 'system';
 function useTheme() {
   const [theme, setThemeState] = useState<Theme>('system');
 
+  /* eslint-disable react-hooks/set-state-in-effect -- restore theme from localStorage on mount */
   useEffect(() => {
     try {
       const saved = localStorage.getItem('pw-theme') as Theme | null;
@@ -46,6 +47,7 @@ function useTheme() {
       }
     } catch { /* localStorage unavailable */ }
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t);

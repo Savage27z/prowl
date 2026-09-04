@@ -203,7 +203,7 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    fetchData();
+    fetchData(); // eslint-disable-line react-hooks/set-state-in-effect -- fetch on mount
   }, [fetchData]);
 
   // Derived values

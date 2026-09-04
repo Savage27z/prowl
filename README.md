@@ -34,7 +34,7 @@ Memory isn't a feature — it's the backbone. Without it:
 - **Agents can't coordinate** — Tracer writes hops, Analyst reads them. No memory = no pipeline.
 - **No pattern recognition** — Every case starts from zero. With memory, 5 solved cases make case 6 faster.
 - **No watchlists** — Dormant funds are never re-traced. Monitor needs persistent state.
-- **Delete memory → Investigation fails.** Prove it at `/memory` → Clear All → watch agents stumble.
+- **Delete memory → Measurable degradation.** Clear All at `/memory` removes cross-case intelligence — agents lose pattern recognition, skip/prioritize directives, and watchlists.
 
 ### Memory Coordination Flow
 

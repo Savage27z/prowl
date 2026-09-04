@@ -534,4 +534,16 @@ export function getSibylMemory(): MemoryAPI {
   return localMemory;
 }
 
+// Await all pending hydrations — call before reading cross-case intelligence
+let _readyPromise: Promise<void> | null = null;
+
+export function waitForMemoryReady(): Promise<void> {
+  if (_readyPromise) return _readyPromise;
+  const promises: Promise<void>[] = [];
+  if (REDIS_URL) promises.push(hydrateFromRedis());
+  if (BRIDGE_URL) promises.push(hydrateFromBridge());
+  _readyPromise = Promise.all(promises).then(() => { ensureSeeded(); });
+  return _readyPromise;
+}
+
 export type { QueryOptions };
