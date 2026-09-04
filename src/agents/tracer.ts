@@ -103,6 +103,34 @@ export class TracerAgent {
       'main'
     );
 
+    // Record the reported theft itself as hop 0 when the trace was seeded from
+    // a suspect address. Without it the trail begins mid-story at the suspect,
+    // and the graph never shows the victim losing the funds.
+    //
+    // Shares branch_id 'main' deliberately: this is the same money as hop 1, so
+    // a separate branch would make summarizeTracedFunds count it twice.
+    if (suspectAddress && suspectAddress.toLowerCase() !== victimWallet.toLowerCase()) {
+      const originHop: Hop = {
+        case_id: caseId,
+        hop_number: 0,
+        from_address: victimWallet,
+        to_address: suspectAddress,
+        amount: traceStartAmount,
+        asset_symbol: tx.asset.symbol,
+        asset_contract: tx.asset.contract,
+        tx_hash: incidentTxHash,
+        timestamp: tx.timestamp || new Date().toISOString(),
+        is_split: false,
+        branch_id: 'main',
+        // Not `flagged` — this is the reported incident, not a finding the
+        // Tracer surfaced, and flagging it would fill Flags & Warnings.
+        flagged: false,
+        flag_reason: 'Reported theft — victim to suspect address',
+      };
+      hops.unshift(originHop);
+      await this.writeHop(originHop);
+    }
+
     // Update case in memory
     await this.updateCase(caseId, hops);
 

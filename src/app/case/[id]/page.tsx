@@ -170,9 +170,15 @@ function FundFlowGraph({ hops, analyses }: { hops: HopData[]; analyses: Analysis
   for (const hop of hops) {
     const fromKey = hop.from_address.toLowerCase();
     const toKey = hop.to_address.toLowerCase();
+    // A terminal hop stores from == to as an endpoint marker, not a movement.
+    // Counting it as outgoing flow stops the node registering as a sink, and
+    // draws a redundant self-loop beside the real incoming edge.
+    const isTerminal = fromKey === toKey;
 
-    outgoingCount.set(fromKey, (outgoingCount.get(fromKey) || 0) + 1);
-    incomingCount.set(toKey, (incomingCount.get(toKey) || 0) + 1);
+    if (!isTerminal) {
+      outgoingCount.set(fromKey, (outgoingCount.get(fromKey) || 0) + 1);
+      incomingCount.set(toKey, (incomingCount.get(toKey) || 0) + 1);
+    }
 
     if (!nodeMap.has(fromKey)) {
       nodeMap.set(fromKey, {
@@ -196,22 +202,35 @@ function FundFlowGraph({ hops, analyses }: { hops: HopData[]; analyses: Analysis
       node.flagReason = hop.flag_reason;
     }
 
-    edges.push({
-      from: fromKey,
-      to: toKey,
-      amount: hop.amount,
-      hopNumber: hop.hop_number,
-      flagged: hop.flagged,
-    });
+    if (!isTerminal) {
+      edges.push({
+        from: fromKey,
+        to: toKey,
+        amount: hop.amount,
+        hopNumber: hop.hop_number,
+        flagged: hop.flagged,
+      });
+    }
   }
 
-  // Mark source/sink nodes
+  // Mark source/sink nodes. Terminal hops are excluded from the counts above,
+  // so an address the trail stopped at correctly reads as a sink.
   const nodes = Array.from(nodeMap.values());
   for (const n of nodes) {
-    // Self-send: address is both sender and receiver — mark as source
-    const selfOnly = incomingCount.has(n.id) && outgoingCount.has(n.id) && nodes.length === 1;
-    n.isSource = !incomingCount.has(n.id) || selfOnly;
+    n.isSource = !incomingCount.has(n.id);
     n.isSink = !outgoingCount.has(n.id);
+  }
+
+  // A trace that never left its starting address gives one node and no edges.
+  // Draw a self-loop so the graph still renders something legible.
+  if (nodes.length === 1 && edges.length === 0 && hops.length > 0) {
+    edges.push({
+      from: nodes[0].id,
+      to: nodes[0].id,
+      amount: hops[0].amount,
+      hopNumber: hops[0].hop_number,
+      flagged: hops[0].flagged,
+    });
   }
 
   // Layout: topological sort into layers, then spread within layers

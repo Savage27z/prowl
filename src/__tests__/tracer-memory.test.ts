@@ -61,6 +61,7 @@ vi.mock('@/agents/ai', () => ({
 const { TracerAgent } = await import('@/agents/tracer');
 const { getSibylMemory } = await import('@/memory/sibyl');
 const { COLLECTIONS } = await import('@/memory/schemas');
+const { summarizeTracedFunds } = await import('@/chain/utils');
 type Analysis = import('@/memory/schemas').Analysis;
 
 describe('TracerAgent — memory changes real branch selection', () => {
@@ -140,6 +141,31 @@ describe('TracerAgent — memory changes real branch selection', () => {
     // BIG was skipped despite being the largest transfer.
     expect(branches).not.toContain(BIG.toLowerCase());
     expect(branches).toContain(MID.toLowerCase());
+  });
+
+  it('seeding from a suspect address records the victim -> suspect theft as hop 0', async () => {
+    const tracer = new TracerAgent();
+    // DRAINER is passed as the suspect, so tracing starts there. Hop 0 must
+    // still show the victim losing the funds, or the trail begins mid-story.
+    const result = await tracer.startTrace('case-origin', INCIDENT_TX, VICTIM, DRAINER);
+
+    const origin = result.hops.find((h) => h.hop_number === 0);
+    expect(origin).toBeDefined();
+    expect(origin!.from_address.toLowerCase()).toBe(VICTIM.toLowerCase());
+    expect(origin!.to_address.toLowerCase()).toBe(DRAINER.toLowerCase());
+    // The reported incident is context, not a Tracer finding — it must not
+    // appear in Flags & Warnings.
+    expect(origin!.flagged).toBe(false);
+
+    // Shares 'main' so the same money is not counted on a second branch.
+    expect(origin!.branch_id).toBe('main');
+    expect(summarizeTracedFunds(result.hops)).toBe('7.500000 ETH');
+  });
+
+  it('no suspect address means no synthetic hop 0', async () => {
+    const tracer = new TracerAgent();
+    const result = await tracer.startTrace('case-no-origin', INCIDENT_TX, VICTIM);
+    expect(result.hops.find((h) => h.hop_number === 0)).toBeUndefined();
   });
 
   it('relayed funds are counted once, not once per hop', async () => {
