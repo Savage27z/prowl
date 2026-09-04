@@ -408,13 +408,22 @@ export function getMemoryMode(): { mode: 'sibyl-sdk' | 'sibyl-bridge' | 'redis-p
 const dualMemory = {
   async store(collection: CollectionName, document: Record<string, unknown>, id?: string): Promise<string> {
     const docId = await localMemory.store(collection, document, id);
-    // Write-through to Redis (fast, survives cold starts)
-    persistCollectionToRedis(collection).catch(() => {});
-    // Write-through to Sibyl Bridge (real SDK — best effort)
-    bridgeFetch('/entity', {
-      method: 'POST',
-      body: { category: collection, name: docId, data: document },
-    }).catch(() => {});
+    // AWAIT both write-throughs. These were fire-and-forget, which loses data
+    // on serverless: the runtime freezes the instance once the handler
+    // returns, discarding promises still in flight. The last write of a
+    // request was the usual casualty — hop 0 is written after tracing
+    // finishes, so it silently failed to reach the bridge and the case came
+    // back a hop short.
+    //
+    // Failures are swallowed, not thrown: a remote outage must not fail an
+    // investigation that already succeeded locally.
+    await Promise.allSettled([
+      persistCollectionToRedis(collection),
+      bridgeFetch('/entity', {
+        method: 'POST',
+        body: { category: collection, name: docId, data: document },
+      }),
+    ]);
     return docId;
   },
 
@@ -428,27 +437,36 @@ const dualMemory = {
 
   async update(collection: CollectionName, id: string, updates: Record<string, unknown>): Promise<void> {
     await localMemory.update(collection, id, updates);
-    persistCollectionToRedis(collection).catch(() => {});
-    // Read-modify-write through bridge
+    // Read-modify-write through bridge, awaited for the same reason as store()
     const existing = await localMemory.retrieve<Record<string, unknown>>(collection, id);
-    if (existing) {
-      bridgeFetch('/entity', {
-        method: 'POST',
-        body: { category: collection, name: id, data: existing },
-      }).catch(() => {});
-    }
+    await Promise.allSettled([
+      persistCollectionToRedis(collection),
+      ...(existing
+        ? [bridgeFetch('/entity', {
+            method: 'POST',
+            body: { category: collection, name: id, data: existing },
+          })]
+        : []),
+    ]);
   },
 
   async delete(collection: CollectionName, id: string): Promise<void> {
     await localMemory.delete(collection, id);
-    persistCollectionToRedis(collection).catch(() => {});
-    bridgeFetch(`/entity?category=${collection}&name=${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
+    await Promise.allSettled([
+      persistCollectionToRedis(collection),
+      bridgeFetch(`/entity?category=${collection}&name=${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    ]);
   },
 
   async clearCollection(collection: CollectionName): Promise<void> {
     await localMemory.clearCollection(collection);
-    persistCollectionToRedis(collection).catch(() => {});
-    bridgeFetch(`/clear?categories=${collection}`, { method: 'DELETE' }).catch(() => {});
+    // Awaited: a clear that does not reach the remote store leaves data that
+    // the next hydration pulls straight back in, so the wipe silently undoes
+    // itself. This is what the memory-deletion demo depends on.
+    await Promise.allSettled([
+      persistCollectionToRedis(collection),
+      bridgeFetch(`/clear?categories=${collection}`, { method: 'DELETE' }),
+    ]);
   },
 
   async clearAll(): Promise<void> {
@@ -460,8 +478,8 @@ const dualMemory = {
         await redis.del(`${REDIS_PREFIX}${name}`).catch(() => {});
       }
     }
-    // Clear Sibyl Bridge
-    bridgeFetch('/clear', { method: 'DELETE' }).catch(() => {});
+    // Clear Sibyl Bridge — awaited, or hydration restores what was wiped
+    await Promise.allSettled([bridgeFetch('/clear', { method: 'DELETE' })]);
   },
 
   async search<T>(query: string, collections?: CollectionName[]): Promise<T[]> {
