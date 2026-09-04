@@ -127,32 +127,37 @@ export class TracerAgent {
     const hops: Hop[] = [];
 
     // Check if this is a known address (exchange, bridge, DEX, mixer, etc.)
+    // Terminal (CEX deposit, bridge) → write a final hop and stop.
+    // Non-terminal (DEX router, mixer, token, infra) → carry the label forward
+    // as an annotation on whatever hop we write next, and keep tracing.
+    // Note: we must NOT write a separate hop here for the non-terminal case —
+    // writeHop keys on `case-hop-<n>-<branch>`, so a second write at the same
+    // hop number would silently overwrite this one and double-count the hop.
     const known = isKnownAddress(address);
+    let knownAnnotation: string | null = null;
     if (known.known) {
-      const hop: Hop = {
-        case_id: caseId,
-        hop_number: hopNumber,
-        from_address: address,
-        to_address: address,
-        amount,
-        tx_hash: parentTxHash,
-        timestamp: new Date().toISOString(),
-        is_split: false,
-        branch_id: branchId,
-        flagged: true,
-        flag_reason: `Known ${known.category}: ${known.label}`,
-      };
-      hops.push(hop);
-      this.totalHopsTraced++;
-      await this.writeHop(hop);
+      knownAnnotation = `Known ${known.category}: ${known.label}`;
 
-      // Only terminal addresses (CEX deposits, bridges) stop tracing.
-      // Non-terminal (DEX routers, mixers, tokens, infra) get annotated
-      // but tracing continues through their outgoing transactions.
       if (known.terminal) {
+        const hop: Hop = {
+          case_id: caseId,
+          hop_number: hopNumber,
+          from_address: address,
+          to_address: address,
+          amount,
+          tx_hash: parentTxHash,
+          timestamp: new Date().toISOString(),
+          is_split: false,
+          branch_id: branchId,
+          flagged: true,
+          flag_reason: knownAnnotation,
+        };
+        hops.push(hop);
+        this.totalHopsTraced++;
+        await this.writeHop(hop);
         return hops;
       }
-      // Non-terminal: fall through to trace outgoing txs from this address
+      // Non-terminal: fall through, annotation is applied below
     }
 
     // Check if this is a contract
@@ -174,7 +179,9 @@ export class TracerAgent {
         is_split: false,
         branch_id: branchId,
         flagged: true,
-        flag_reason: 'Dead end — funds sitting in wallet',
+        flag_reason: knownAnnotation
+          ? `${knownAnnotation} — no further outgoing transfers`
+          : 'Dead end — funds sitting in wallet',
       };
       hops.push(hop);
       this.totalHopsTraced++;
@@ -195,7 +202,9 @@ export class TracerAgent {
         is_split: false,
         branch_id: branchId,
         flagged: true,
-        flag_reason: `High-activity address (${outgoingTxs.length} outgoing txs) — possible mixer/exchange`,
+        flag_reason: knownAnnotation
+          ? `${knownAnnotation} — high activity (${outgoingTxs.length} outgoing txs), trail not attributable`
+          : `High-activity address (${outgoingTxs.length} outgoing txs) — possible mixer/exchange`,
       };
       hops.push(hop);
       this.totalHopsTraced++;
@@ -264,11 +273,16 @@ export class TracerAgent {
 
       // Check if this destination was informed by memory
       const isMemoryDriven = this.prioritizeAddresses.has(tx.to.toLowerCase());
-      const flagReason = isMemoryDriven
+      const baseReason = isMemoryDriven
         ? 'Memory hit — address flagged in prior investigation'
         : isContractAddr
           ? 'Contract interaction detected'
           : null;
+      // Carry the non-terminal known-address label (DEX/mixer/token) forward
+      // so the hop records that funds passed through it
+      const flagReason = knownAnnotation
+        ? `Routed via ${knownAnnotation}${baseReason ? ` — ${baseReason}` : ''}`
+        : baseReason;
 
       const hop: Hop = {
         case_id: caseId,
@@ -280,7 +294,7 @@ export class TracerAgent {
         timestamp: tx.timestamp,
         is_split: isSplit,
         branch_id: newBranchId,
-        flagged: isContractAddr || isMemoryDriven,
+        flagged: isContractAddr || isMemoryDriven || knownAnnotation !== null,
         flag_reason: flagReason,
       };
 
