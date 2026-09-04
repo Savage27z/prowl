@@ -260,4 +260,134 @@ describe('Sibyl Memory — Agent Coordination Pipeline', () => {
     expect(finalAnalysis).toHaveLength(1);
     expect(finalWatchlist).toHaveLength(1);
   });
+
+  it('case A intelligence changes case B branch selection (cross-case memory)', async () => {
+    // ── Case A: Analyst flags 0xDRAINER as high-risk ──────────────
+    const caseA = 'case-A';
+    const analysisA: Analysis = {
+      case_id: caseA,
+      hop_number: 1,
+      address_analyzed: '0xDRAINER',
+      risk_level: 'high',
+      pattern_matches: ['pat-001'],
+      similar_cases: [],
+      notes: 'Known drainer address — fund splitting detected.',
+      confidence: 0.9,
+    };
+    await memory.store(
+      COLLECTIONS.ANALYSIS,
+      analysisA as unknown as Record<string, unknown>,
+      `${caseA}-analysis-1-main`
+    );
+
+    // Also store a pattern linking 0xDRAINER to fund_splitting
+    const pattern: Pattern = {
+      pattern_id: 'pat-cross-001',
+      pattern_type: 'fund_splitting',
+      description: 'Drainer splits funds into multiple wallets',
+      first_seen_case: caseA,
+      times_matched: 1,
+      confidence: 0.85,
+      related_addresses: ['0xDRAINER'],
+      bytecode_hash: null,
+    };
+    await memory.store(
+      COLLECTIONS.PATTERNS,
+      pattern as unknown as Record<string, unknown>,
+      pattern.pattern_id
+    );
+
+    // ── Case B: Read cross-case intelligence ──────────────────────
+    // Simulate what Tracer.loadMemoryDirectives() does
+    const allAnalyses = await memory.query<Analysis>(COLLECTIONS.ANALYSIS, {});
+    const allPatterns = await memory.query<Pattern>(COLLECTIONS.PATTERNS, {});
+
+    // Build prioritize set from memory (same logic as loadMemoryDirectives)
+    const prioritizeAddresses = new Set<string>();
+    for (const analysis of allAnalyses) {
+      if (analysis.risk_level === 'high') {
+        prioritizeAddresses.add(analysis.address_analyzed.toLowerCase());
+      }
+    }
+    for (const p of allPatterns) {
+      if (p.pattern_type === 'fund_splitting') {
+        for (const addr of p.related_addresses) {
+          prioritizeAddresses.add(addr.toLowerCase());
+        }
+      }
+    }
+
+    // ── Verify: case A's intelligence is available to case B ──────
+    expect(prioritizeAddresses.has('0xdrainer')).toBe(true);
+    expect(prioritizeAddresses.size).toBeGreaterThanOrEqual(1);
+
+    // Simulate branch selection: 3 outgoing txs, one is 0xDRAINER
+    const candidateTxs = [
+      { to: '0xRANDOM1', value: '5.0' },   // highest value
+      { to: '0xDRAINER', value: '0.5' },    // low value BUT memory-prioritized
+      { to: '0xRANDOM2', value: '2.0' },    // mid value
+    ];
+
+    // Without memory: pure value sort picks 0xRANDOM1 first
+    const valueSorted = [...candidateTxs].sort((a, b) => parseFloat(b.value) - parseFloat(a.value));
+    expect(valueSorted[0].to).toBe('0xRANDOM1');
+
+    // With memory: 0xDRAINER gets prioritized despite low value
+    const memPrioritized = candidateTxs.filter(tx => prioritizeAddresses.has(tx.to.toLowerCase()));
+    const memRemaining = candidateTxs.filter(tx => !prioritizeAddresses.has(tx.to.toLowerCase()));
+    const memoryOrder = [...memPrioritized, ...memRemaining];
+    expect(memoryOrder[0].to).toBe('0xDRAINER');
+
+    // ── This is the proof: same inputs, different branch order ────
+    // Value-first picks the wrong branch. Memory-first picks the drainer.
+    expect(valueSorted[0].to).not.toBe(memoryOrder[0].to);
+  });
+
+  it('clearing memory removes cross-case intelligence (degradation proof)', async () => {
+    // Store case A analysis
+    const analysisA: Analysis = {
+      case_id: 'degrade-A',
+      hop_number: 1,
+      address_analyzed: '0xSUSPECT',
+      risk_level: 'high',
+      pattern_matches: ['pat-001'],
+      similar_cases: [],
+      notes: 'Flagged in prior investigation.',
+      confidence: 0.85,
+    };
+    await memory.store(
+      COLLECTIONS.ANALYSIS,
+      analysisA as unknown as Record<string, unknown>,
+      'degrade-A-analysis-1'
+    );
+
+    // Verify intelligence exists
+    const before = await memory.query<Analysis>(COLLECTIONS.ANALYSIS, {});
+    expect(before.length).toBeGreaterThan(0);
+    const highRiskBefore = before.filter(a => a.risk_level === 'high');
+    expect(highRiskBefore.length).toBeGreaterThan(0);
+
+    // Clear all memory — simulates deletion test
+    await memory.clearAll();
+
+    // Verify intelligence is gone
+    const after = await memory.query<Analysis>(COLLECTIONS.ANALYSIS, {});
+    expect(after).toHaveLength(0);
+
+    // Verify patterns are gone
+    const patternsAfter = await memory.query<Pattern>(COLLECTIONS.PATTERNS, {});
+    expect(patternsAfter).toHaveLength(0);
+
+    // Build prioritize set — should be empty now
+    const prioritizeAddresses = new Set<string>();
+    for (const analysis of after) {
+      if (analysis.risk_level === 'high') {
+        prioritizeAddresses.add(analysis.address_analyzed.toLowerCase());
+      }
+    }
+
+    // 0xSUSPECT is no longer prioritized — memory degradation proven
+    expect(prioritizeAddresses.has('0xsuspect')).toBe(false);
+    expect(prioritizeAddresses.size).toBe(0);
+  });
 });

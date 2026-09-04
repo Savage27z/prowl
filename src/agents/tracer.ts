@@ -126,7 +126,7 @@ export class TracerAgent {
 
     const hops: Hop[] = [];
 
-    // Check if this is a known address (exchange, bridge, etc.)
+    // Check if this is a known address (exchange, bridge, DEX, mixer, etc.)
     const known = isKnownAddress(address);
     if (known.known) {
       const hop: Hop = {
@@ -140,12 +140,19 @@ export class TracerAgent {
         is_split: false,
         branch_id: branchId,
         flagged: true,
-        flag_reason: `Known address: ${known.label}`,
+        flag_reason: `Known ${known.category}: ${known.label}`,
       };
       hops.push(hop);
       this.totalHopsTraced++;
       await this.writeHop(hop);
-      return hops;
+
+      // Only terminal addresses (CEX deposits, bridges) stop tracing.
+      // Non-terminal (DEX routers, mixers, tokens, infra) get annotated
+      // but tracing continues through their outgoing transactions.
+      if (known.terminal) {
+        return hops;
+      }
+      // Non-terminal: fall through to trace outgoing txs from this address
     }
 
     // Check if this is a contract
@@ -427,11 +434,17 @@ Prioritize: large value transfers, round numbers, rapid timing, contract interac
           );
         }
 
-        // Low-risk / clean addresses from prior cases → skip (dead ends)
-        if (analysis.risk_level === 'low' || analysis.risk_level === 'none') {
+        // Only skip addresses with strong evidence they are irrelevant:
+        // - Must be low-risk AND analyzed in 2+ prior cases (not just one)
+        // - "low" alone means "not enough evidence" — could still be the route
+        if (
+          (analysis.risk_level === 'low' || analysis.risk_level === 'none') &&
+          analysis.similar_cases && analysis.similar_cases.length >= 2 &&
+          analysis.notes?.includes('verified clean')
+        ) {
           this.skipAddresses.add(addr);
           this.memoryHits.push(
-            `MEMORY_SKIP: ${addr.slice(0, 10)}... marked ${analysis.risk_level} in case ${analysis.case_id}`
+            `MEMORY_SKIP: ${addr.slice(0, 10)}... verified clean across ${analysis.similar_cases.length + 1} cases`
           );
         }
       }
@@ -472,10 +485,10 @@ Prioritize: large value transfers, round numbers, rapid timing, contract interac
     const lastHop = hops[hops.length - 1];
     if (!lastHop) return 'dead_end';
 
-    if (lastHop.flag_reason?.includes('Known address')) {
-      if (lastHop.flag_reason.includes('Bridge')) return 'bridge_found';
-      return 'exchange_found';
-    }
+    // Only terminal destinations (CEX, bridge) resolve the case.
+    // Non-terminal known addresses (DEX, mixer, token, infra) don't.
+    if (lastHop.flag_reason?.includes('Known cex:')) return 'exchange_found';
+    if (lastHop.flag_reason?.includes('Known bridge:')) return 'bridge_found';
 
     if (lastHop.flag_reason?.includes('Dead end')) return 'dead_end';
 

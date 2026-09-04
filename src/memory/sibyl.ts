@@ -254,30 +254,32 @@ function getRedis(): import('@upstash/redis').Redis | null {
 }
 
 const REDIS_PREFIX = 'prowl:';
-let _redisHydrated = false;
+let _redisHydratePromise: Promise<void> | null = null;
 
-async function hydrateFromRedis(): Promise<void> {
-  if (_redisHydrated) return;
-  _redisHydrated = true;
-  const redis = getRedis();
-  if (!redis) return;
-  try {
-    for (const collectionName of Object.values(COLLECTIONS)) {
-      const key = `${REDIS_PREFIX}${collectionName}`;
-      const raw = await redis.get<Record<string, { id: string; data: Record<string, unknown>; ts: string }>>(key);
-      if (raw && typeof raw === 'object') {
-        const c = col(collectionName);
-        for (const [docId, doc] of Object.entries(raw)) {
-          if (!c.has(docId)) {
-            c.set(docId, doc);
+function hydrateFromRedis(): Promise<void> {
+  if (_redisHydratePromise) return _redisHydratePromise;
+  _redisHydratePromise = (async () => {
+    const redis = getRedis();
+    if (!redis) return;
+    try {
+      for (const collectionName of Object.values(COLLECTIONS)) {
+        const key = `${REDIS_PREFIX}${collectionName}`;
+        const raw = await redis.get<Record<string, { id: string; data: Record<string, unknown>; ts: string }>>(key);
+        if (raw && typeof raw === 'object') {
+          const c = col(collectionName);
+          for (const [docId, doc] of Object.entries(raw)) {
+            if (!c.has(docId)) {
+              c.set(docId, doc);
+            }
           }
         }
       }
+      console.log('[SibylMemory] Hydrated from Redis — persistent memory active');
+    } catch (e) {
+      console.log('[SibylMemory] Redis hydration failed, falling back to local:', e);
     }
-    console.log('[SibylMemory] Hydrated from Redis — persistent memory active');
-  } catch (e) {
-    console.log('[SibylMemory] Redis hydration failed, falling back to local:', e);
-  }
+  })();
+  return _redisHydratePromise;
 }
 
 async function persistCollectionToRedis(collectionName: CollectionName): Promise<void> {
@@ -482,32 +484,34 @@ const dualMemory = {
 // ─── Sibyl Bridge hydration ────────────────────────────────────
 // On startup, hydrate the local cache from the bridge's /list endpoint
 // so that cross-run knowledge persists through Sibyl (not just Redis).
-let _bridgeHydrated = false;
+let _bridgeHydratePromise: Promise<void> | null = null;
 
-async function hydrateFromBridge(): Promise<void> {
-  if (_bridgeHydrated || !BRIDGE_URL) return;
-  _bridgeHydrated = true;
-  try {
-    for (const collectionName of Object.values(COLLECTIONS)) {
-      const res = await bridgeFetch(`/list?category=${collectionName}`);
-      const entities = (res?.entities || res?.items || []) as { name: string; data: Record<string, unknown> }[];
-      if (entities.length > 0) {
-        const c = col(collectionName);
-        for (const entity of entities) {
-          if (entity.name && entity.data && !c.has(entity.name)) {
-            c.set(entity.name, {
-              id: entity.name,
-              data: entity.data,
-              ts: new Date().toISOString(),
-            });
+function hydrateFromBridge(): Promise<void> {
+  if (_bridgeHydratePromise || !BRIDGE_URL) return Promise.resolve();
+  _bridgeHydratePromise = (async () => {
+    try {
+      for (const collectionName of Object.values(COLLECTIONS)) {
+        const res = await bridgeFetch(`/list?category=${collectionName}`);
+        const entities = (res?.entities || res?.items || []) as { name: string; data: Record<string, unknown> }[];
+        if (entities.length > 0) {
+          const c = col(collectionName);
+          for (const entity of entities) {
+            if (entity.name && entity.data && !c.has(entity.name)) {
+              c.set(entity.name, {
+                id: entity.name,
+                data: entity.data,
+                ts: new Date().toISOString(),
+              });
+            }
           }
+          console.log(`[SibylMemory] Hydrated ${entities.length} docs from Sibyl bridge for ${collectionName}`);
         }
-        console.log(`[SibylMemory] Hydrated ${entities.length} docs from Sibyl bridge for ${collectionName}`);
       }
+    } catch (e) {
+      console.log('[SibylMemory] Bridge hydration skipped (bridge unavailable):', e);
     }
-  } catch (e) {
-    console.log('[SibylMemory] Bridge hydration skipped (bridge unavailable):', e);
-  }
+  })();
+  return _bridgeHydratePromise;
 }
 
 export function getSibylMemory(): MemoryAPI {

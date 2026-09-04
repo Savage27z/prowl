@@ -391,59 +391,69 @@ export class ChainReader {
   }
 }
 
+// Known address categories — determines tracing behavior
+export type AddressCategory = 'cex' | 'bridge' | 'dex' | 'mixer' | 'token' | 'infrastructure';
+
+export interface KnownAddressEntry {
+  label: string;
+  category: AddressCategory;
+  terminal: boolean;  // true = stop tracing here, false = annotate and continue
+}
+
 // Known addresses for detection — exchanges, bridges, and infrastructure on Base
-export const KNOWN_ADDRESSES: Record<string, string> = {
-  // ── CEX Hot Wallets ──────────────────────────────────────────────
-  '0x3154cf16ccdb4c6d922629664174b904d80f2c35': 'Binance Hot Wallet',
-  '0x28c6c06298d514db089934071355e5743bf21d60': 'Binance Hot Wallet 14',
-  '0xdfd5293d8e347dfe59e90efd55b2956a1343963d': 'Binance Hot Wallet 16',
-  '0x21a31ee1afc51d94c2efccaa2092ad1028285549': 'Binance Hot Wallet 20',
-  '0xf89d7b9c864f589bbf53a82105107622b35eaa40': 'Bybit Hot Wallet',
-  '0x1ab4973a48dc892cd9971ece8e01dcc7688f8f23': 'Coinbase',
-  '0xa9d1e08c7793af67e9d92fe308d5697fb81d3e43': 'Coinbase 10',
-  '0x503828976d22510aad0201ac7ec88293211d23da': 'Coinbase 2',
-  '0xddfabcdc4d8ffc6d5beaf154f18b778f892a0740': 'Coinbase 3',
-  '0x71660c4005ba85c37ccec55d0c4493e66fe775d3': 'Coinbase 4',
-  '0xfbb1b73c4f0bda4f67dca266ce6ef42f520fbb98': 'Bitget Hot Wallet',
-  '0x5bdf85216ec1e38d6458c870992a69e38e03f7ef': 'OKX',
-  '0x6cc5f688a315f3dc28a7781717a9a798a59fda7b': 'OKX 2',
-  '0x98ec059dc3adfbdd63429454aeb0c990fba4a128': 'KuCoin Hot Wallet',
-  '0xd6216fc19db775df9774a6e33526131da7d19a2c': 'KuCoin 2',
-  '0x0d0707963952f2fba59dd06f2b425ace40b492fe': 'Gate.io',
-  '0x1c4b70a3968436b9a0a9cf5205c787eb81bb558c': 'Gate.io 2',
-  '0x0639556f03714a74a5feeaf5736a4a64ff70d921': 'Kraken Hot Wallet',
-  '0xa83b11093c8a88e1fc5b2f21fa89e1e7ae4ed67a': 'HTX (Huobi)',
-  '0x46340b20830761efd32832a74d7169b29feb9758': 'Crypto.com',
-  '0xcffad3200574698b78f32232aa9d63eabd290703': 'Crypto.com 2',
-  // ── Bridges ──────────────────────────────────────────────────────
-  '0x3154cf16ccdb4c6d922629664174b904d80f2c36': 'Base Bridge (Official)',
-  '0x49048044d57e1c92a77f79988d21fa8faf74e97e': 'Base Portal (L1 Bridge)',
-  '0x3666f603cc164936c1b87e207f36beba4ac5f18a': 'Base Standard Bridge',
-  '0xaf54be5b6eec24d6bfacf1cce4eaf680a8239398': 'Across Bridge (Base)',
-  '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae': 'LI.FI Diamond',
-  '0x2a3dd3eb832af982ec71669e178424b10dca2ede': 'Stargate Finance (Base)',
-  '0xe4edb277e41dc89ab076a1f049f4a3efa700bce8': 'Orbiter Finance',
-  // ── DEX Routers / Aggregators ────────────────────────────────────
-  '0x2626664c2603336e57b271c5c0b26f421741e481': 'Uniswap Universal Router (Base)',
-  '0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad': 'Uniswap Universal Router V2 (Base)',
-  '0x1111111254eeb25477b68fb85ed929f73a960582': '1inch Router v5',
-  '0x6131b5fae19ea4f9d964eac0408e4408b66337b5': 'KyberSwap (Base)',
-  '0x6352a56caadc4f1e25cd6c75970fa768a3304e64': 'OpenOcean Exchange',
-  // ── Mixers / Privacy ─────────────────────────────────────────────
-  '0xd90e2f925da726b50c4ed8d0fb90ad053324f31b': 'Tornado Cash Router',
-  '0x722122df12d4e14e13ac3b6895a86e84145b6967': 'Tornado Cash Proxy',
-  // ── Infrastructure ───────────────────────────────────────────────
-  '0x4200000000000000000000000000000000000006': 'WETH (Base)',
-  '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913': 'USDC (Base)',
-  '0x4200000000000000000000000000000000000015': 'L1 Block (Base System)',
+export const KNOWN_ADDRESSES: Record<string, KnownAddressEntry> = {
+  // ── CEX Hot Wallets (terminal — funds reached an exchange) ──────
+  '0x3154cf16ccdb4c6d922629664174b904d80f2c35': { label: 'Binance Hot Wallet', category: 'cex', terminal: true },
+  '0x28c6c06298d514db089934071355e5743bf21d60': { label: 'Binance Hot Wallet 14', category: 'cex', terminal: true },
+  '0xdfd5293d8e347dfe59e90efd55b2956a1343963d': { label: 'Binance Hot Wallet 16', category: 'cex', terminal: true },
+  '0x21a31ee1afc51d94c2efccaa2092ad1028285549': { label: 'Binance Hot Wallet 20', category: 'cex', terminal: true },
+  '0xf89d7b9c864f589bbf53a82105107622b35eaa40': { label: 'Bybit Hot Wallet', category: 'cex', terminal: true },
+  '0x1ab4973a48dc892cd9971ece8e01dcc7688f8f23': { label: 'Coinbase', category: 'cex', terminal: true },
+  '0xa9d1e08c7793af67e9d92fe308d5697fb81d3e43': { label: 'Coinbase 10', category: 'cex', terminal: true },
+  '0x503828976d22510aad0201ac7ec88293211d23da': { label: 'Coinbase 2', category: 'cex', terminal: true },
+  '0xddfabcdc4d8ffc6d5beaf154f18b778f892a0740': { label: 'Coinbase 3', category: 'cex', terminal: true },
+  '0x71660c4005ba85c37ccec55d0c4493e66fe775d3': { label: 'Coinbase 4', category: 'cex', terminal: true },
+  '0xfbb1b73c4f0bda4f67dca266ce6ef42f520fbb98': { label: 'Bitget Hot Wallet', category: 'cex', terminal: true },
+  '0x5bdf85216ec1e38d6458c870992a69e38e03f7ef': { label: 'OKX', category: 'cex', terminal: true },
+  '0x6cc5f688a315f3dc28a7781717a9a798a59fda7b': { label: 'OKX 2', category: 'cex', terminal: true },
+  '0x98ec059dc3adfbdd63429454aeb0c990fba4a128': { label: 'KuCoin Hot Wallet', category: 'cex', terminal: true },
+  '0xd6216fc19db775df9774a6e33526131da7d19a2c': { label: 'KuCoin 2', category: 'cex', terminal: true },
+  '0x0d0707963952f2fba59dd06f2b425ace40b492fe': { label: 'Gate.io', category: 'cex', terminal: true },
+  '0x1c4b70a3968436b9a0a9cf5205c787eb81bb558c': { label: 'Gate.io 2', category: 'cex', terminal: true },
+  '0x0639556f03714a74a5feeaf5736a4a64ff70d921': { label: 'Kraken Hot Wallet', category: 'cex', terminal: true },
+  '0xa83b11093c8a88e1fc5b2f21fa89e1e7ae4ed67a': { label: 'HTX (Huobi)', category: 'cex', terminal: true },
+  '0x46340b20830761efd32832a74d7169b29feb9758': { label: 'Crypto.com', category: 'cex', terminal: true },
+  '0xcffad3200574698b78f32232aa9d63eabd290703': { label: 'Crypto.com 2', category: 'cex', terminal: true },
+  // ── Bridges (terminal — funds left the chain) ────────────────────
+  '0x3154cf16ccdb4c6d922629664174b904d80f2c36': { label: 'Base Bridge (Official)', category: 'bridge', terminal: true },
+  '0x49048044d57e1c92a77f79988d21fa8faf74e97e': { label: 'Base Portal (L1 Bridge)', category: 'bridge', terminal: true },
+  '0x3666f603cc164936c1b87e207f36beba4ac5f18a': { label: 'Base Standard Bridge', category: 'bridge', terminal: true },
+  '0xaf54be5b6eec24d6bfacf1cce4eaf680a8239398': { label: 'Across Bridge (Base)', category: 'bridge', terminal: true },
+  '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae': { label: 'LI.FI Diamond', category: 'bridge', terminal: true },
+  '0x2a3dd3eb832af982ec71669e178424b10dca2ede': { label: 'Stargate Finance (Base)', category: 'bridge', terminal: true },
+  '0xe4edb277e41dc89ab076a1f049f4a3efa700bce8': { label: 'Orbiter Finance', category: 'bridge', terminal: true },
+  // ── DEX Routers (NOT terminal — annotate and continue tracing) ──
+  '0x2626664c2603336e57b271c5c0b26f421741e481': { label: 'Uniswap Universal Router', category: 'dex', terminal: false },
+  '0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad': { label: 'Uniswap Universal Router V2', category: 'dex', terminal: false },
+  '0x1111111254eeb25477b68fb85ed929f73a960582': { label: '1inch Router v5', category: 'dex', terminal: false },
+  '0x6131b5fae19ea4f9d964eac0408e4408b66337b5': { label: 'KyberSwap', category: 'dex', terminal: false },
+  '0x6352a56caadc4f1e25cd6c75970fa768a3304e64': { label: 'OpenOcean Exchange', category: 'dex', terminal: false },
+  // ── Mixers (NOT terminal — flag high risk and continue) ──────────
+  '0xd90e2f925da726b50c4ed8d0fb90ad053324f31b': { label: 'Tornado Cash Router', category: 'mixer', terminal: false },
+  '0x722122df12d4e14e13ac3b6895a86e84145b6967': { label: 'Tornado Cash Proxy', category: 'mixer', terminal: false },
+  // ── Token contracts (NOT terminal — never treat as destination) ──
+  '0x4200000000000000000000000000000000000006': { label: 'WETH (Base)', category: 'token', terminal: false },
+  '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913': { label: 'USDC (Base)', category: 'token', terminal: false },
+  // ── Infrastructure (NOT terminal — annotate only) ────────────────
+  '0x4200000000000000000000000000000000000015': { label: 'L1 Block (Base System)', category: 'infrastructure', terminal: false },
 };
 
-export function isKnownAddress(address: string): { known: boolean; label: string | null } {
+export function isKnownAddress(address: string): { known: boolean; label: string | null; category: AddressCategory | null; terminal: boolean } {
   const lower = address.toLowerCase();
-  for (const [addr, label] of Object.entries(KNOWN_ADDRESSES)) {
+  for (const [addr, entry] of Object.entries(KNOWN_ADDRESSES)) {
     if (addr.toLowerCase() === lower) {
-      return { known: true, label };
+      return { known: true, label: entry.label, category: entry.category, terminal: entry.terminal };
     }
   }
-  return { known: false, label: null };
+  return { known: false, label: null, category: null, terminal: false };
 }
