@@ -6,6 +6,7 @@ Four agents coordinate *through* Sibyl Memory to solve onchain bounties. What on
 
 | | |
 |---|---|
+| **Demo** | [youtu.be/8kv2Oomk4pw](https://youtu.be/8kv2Oomk4pw) — 4:51 walkthrough |
 | **Live** | [prowl-ebon.vercel.app](https://prowl-ebon.vercel.app) |
 | **Contract** | [`0x472fd94B2444Dd549E1f2847fa9039d46eCB906D`](https://sepolia.basescan.org/address/0x472fd94B2444Dd549E1f2847fa9039d46eCB906D) — Base Sepolia, verified |
 | **Treasury** | `0x21fc67258Dd145C0C39bd87B3ECa9C2508A48F65` |
